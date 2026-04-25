@@ -1,0 +1,49 @@
+# -----------------------------------------------------------------------------
+# Equity universe configuration
+# -----------------------------------------------------------------------------
+# Controls which stocks the platform analyses.
+# Market cap thresholds are in ₹ crore.
+# -----------------------------------------------------------------------------
+
+version: 1
+
+# --- Which index memberships to include ---
+indices:
+  nifty_50: true
+  nifty_next_50: true
+  nifty_midcap_150: true
+  nifty_smallcap_250: false   # enable in Phase 2+
+  nifty_500: false            # enable in Phase 3+
+
+# --- Market cap buckets (₹ crore) ---
+market_cap_buckets:
+  large_cap_min: 20000
+  mid_cap_min: 5000
+  mid_cap_max: 20000
+  small_cap_max: 5000
+
+# --- Liquidity filter ---
+liquidity:
+  min_median_daily_turnover_cr: 5      # ₹5 crore default
+  flag_below_cr: 3                     # flag anything under this
+
+# --- Exchange preference ---
+exchanges:
+  primary: NSE
+  secondary: BSE
+
+# --- Segment (MVP = cash equity only) ---
+segments:
+  cash_equity: true
+  futures_options: false
+  commodities: false
+  currency: false
+  crypto: false
+
+# --- Starter watchlist (Phase 0 — used only for initial verification) ---
+starter_watchlist:
+  - RELIANCE.NS
+  - TCS.NS
+  - HDFCBANK.NS
+  - INFY.NS
+  - ICICIBANK.NS

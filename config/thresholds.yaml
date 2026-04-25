@@ -1,0 +1,58 @@
+# -----------------------------------------------------------------------------
+# Threshold configuration
+# -----------------------------------------------------------------------------
+# Every "magic number" that influences a decision lives here — never in code.
+# -----------------------------------------------------------------------------
+
+version: 1
+
+# --- Promoter & ownership ---
+promoter:
+  pledge_warning_pct: 20.0           # flag if pledge > this
+  min_holding_pct_for_skin: 40.0     # desirable floor
+
+# --- Technical signal parameters ---
+signals:
+  ema_200_pullback:
+    rsi_low: 40
+    rsi_high: 50
+    max_distance_pct: 3.0
+    trend_lookback_days: 200
+
+  rsi_60_momentum:
+    rsi_floor: 60
+
+  breakout_with_volume:
+    volume_multiple: 2.0             # vs 20-day avg
+    lookback_days_for_high: 252      # 52-week high
+
+  darvas_base_breakout:
+    min_consolidation_days: 20
+    max_range_pct: 10.0
+
+  mean_reversion_oversold:
+    rsi_threshold: 30
+
+# --- Risk management (educational defaults — not investment advice) ---
+risk:
+  max_portfolio_risk_per_trade_pct: 1.0
+  default_stop_loss_atr_multiple: 2.0
+  default_target_r_multiple: 2.5     # reward-to-risk target
+
+# --- Data quality thresholds ---
+data_quality:
+  max_missing_close_pct: 5.0         # fail if > this share of closes are missing
+  max_single_day_price_move_pct: 40.0 # flag suspicious jumps (likely unadjusted split)
+  min_daily_volume: 0                # zero volume allowed (holidays, suspensions)
+  stale_price_days: 5                # data older than this is stale
+
+# --- Result volatility ---
+result_volatility:
+  window_days_before: 5
+  window_days_after: 5
+  lookback_quarters: 8
+
+# --- Sector ranking ---
+ranking:
+  percentile_peer_group: sector      # sector | industry | cap_bucket
+  min_peers_required: 5              # don't rank if peer group is smaller

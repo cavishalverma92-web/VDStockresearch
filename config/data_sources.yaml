@@ -1,0 +1,132 @@
+# -----------------------------------------------------------------------------
+# Data source registry
+# -----------------------------------------------------------------------------
+# The provider abstraction layer (src/stock_platform/data/providers) reads this
+# file to decide which source to use for each data type.
+#
+# `status` values:
+#   active      — currently implemented and in use
+#   partial     — implemented but may degrade gracefully or needs manual verification
+#   planned     — not yet built
+#   deprecated  — do not use
+# -----------------------------------------------------------------------------
+
+version: 1
+
+price_ohlcv:
+  primary: yfinance
+  fallback: null
+  refresh: daily
+  cache_ttl_hours: 24
+  providers:
+    yfinance:
+      status: active
+      free: true
+      notes: "MVP. Verify Indian symbol coverage + adjusted prices."
+    kite:
+      status: planned
+      free: false
+      notes: "Zerodha Kite Connect — paid upgrade path."
+    dhan:
+      status: planned
+      free: false
+    fyers:
+      status: planned
+      free: false
+    upstox:
+      status: planned
+      free: false
+
+fundamentals:
+  primary: local_csv
+  fallback: null
+  refresh: quarterly
+  cache_ttl_hours: 168   # 7 days
+  providers:
+    local_csv:
+      status: active
+      free: true
+      notes: "Safe Phase 1 provider. Reads local CSV sample/template; no scraping."
+    screener:
+      status: planned
+      free: true
+      notes: "Verify ToS before automated scraping."
+    trendlyne:
+      status: planned
+      free: false
+    tijori:
+      status: planned
+      free: false
+
+corporate_actions:
+  primary: nse
+  fallback: yfinance
+  refresh: daily
+  providers:
+    nse:
+      status: planned
+      free: true
+    yfinance:
+      status: active
+      free: true
+      notes: "Cross-check splits/bonuses manually."
+
+holdings:
+  primary: amfi
+  fallback: null
+  refresh: monthly
+  providers:
+    amfi:
+      status: planned
+      free: true
+
+insider_trades:
+  primary: sebi
+  fallback: null
+  refresh: daily
+  providers:
+    sebi:
+      status: planned
+      free: true
+      notes: "SEBI PIT disclosures."
+
+bulk_block_deals:
+  primary: nse
+  fallback: bse
+  refresh: daily
+  providers:
+    nse:
+      status: partial
+      free: true
+      notes: "Implemented with graceful fallback; endpoint may require browser session."
+    bse:
+      status: planned
+      free: true
+
+events:
+  primary: nse
+  fallback: moneycontrol
+  refresh: daily
+  providers:
+    nse:
+      status: planned
+      free: true
+    moneycontrol:
+      status: planned
+      free: true
+
+news:
+  primary: null
+  refresh: deferred
+  providers: {}
+
+macro:
+  primary: null
+  refresh: weekly
+  providers: {}
+
+# --- Rate limiting (applied by the HTTP layer) ---
+rate_limits:
+  default_requests_per_second: 2
+  nse_requests_per_second: 1      # be very conservative with NSE
+  screener_requests_per_second: 1

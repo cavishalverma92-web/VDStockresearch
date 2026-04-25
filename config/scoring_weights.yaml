@@ -1,0 +1,69 @@
+# -----------------------------------------------------------------------------
+# Composite scoring weights
+# -----------------------------------------------------------------------------
+# ALL weights are 0.0–1.0 and MUST sum to 1.0 within each level.
+# Edit this file to rebalance the model WITHOUT changing code.
+# Any weight change should be logged in PROJECT_STATE.md → "Model weight history".
+# -----------------------------------------------------------------------------
+
+version: 1
+last_updated: "phase-0-scaffold"
+
+# --- Top-level buckets (must sum to 1.0) ---
+buckets:
+  fundamentals: 0.35
+  technicals: 0.30
+  flows: 0.17
+  events_quality: 0.12
+  macro_sector: 0.06
+
+# --- Sub-weights inside each bucket (each block must sum to 1.0) ---
+fundamentals:
+  growth: 0.25         # Revenue / PAT / EPS / FCF growth
+  profitability: 0.25  # ROE, ROCE, ROIC
+  valuation: 0.20      # PE, EV/EBITDA, PEG, FCF yield
+  balance_sheet: 0.15  # D/E, interest coverage, net debt / EBITDA
+  quality_scores: 0.15 # Piotroski, Altman, (later) Beneish
+
+technicals:
+  trend: 0.30          # MA stack, golden/death cross, 200 EMA distance
+  momentum: 0.25       # RSI, MACD, ADX (later)
+  volatility: 0.10     # ATR % of price, BB width
+  volume: 0.15         # relative volume, 20-day avg, delivery %
+  structure: 0.20      # 52W high/low distance, base detection, S/R
+
+flows:
+  fii_dii: 0.30
+  mf_ownership_change: 0.25
+  fii_shareholding_change: 0.20
+  insider_trades: 0.15
+  bulk_block_deals: 0.10
+
+events_quality:
+  earnings_trend: 0.40       # positive/negative surprise history
+  result_volatility: 0.20    # lower is better for core holdings
+  corporate_actions: 0.15
+  rating_actions: 0.15       # upgrades / downgrades (later)
+  guidance_quality: 0.10     # later, from concall summarization
+
+macro_sector:
+  sector_rs: 0.50            # relative strength vs Nifty 500
+  sector_breadth: 0.30
+  macro_context: 0.20
+
+# --- Thresholds that shape score interpretation ---
+score_bands:
+  strong_candidate: 80
+  watchlist: 60
+  neutral: 40
+  avoid: 0
+
+# --- Signal weighting (may later be overridden by historical hit-rate) ---
+signal_weights:
+  ema_200_pullback: 1.0
+  rsi_60_momentum: 1.0
+  breakout_with_volume: 1.0
+  darvas_base_breakout: 1.0
+  mean_reversion_oversold: 0.8  # lower confidence by default
+  ma_stack: 0.9
+  golden_death_cross: 0.8

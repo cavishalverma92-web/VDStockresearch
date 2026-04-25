@@ -1,0 +1,266 @@
+﻿# PROJECT_STATE.md
+
+> This file tracks the current state of the project. Update it at the end of every working session so any AI assistant, or future-you, can pick up exactly where you left off.
+
+---
+
+## Current phase
+
+**Phase 7 - Real Fundamentals Data** *(in progress → complete)*
+
+---
+
+## Last successful verification
+
+2026-04-25:
+- Python 3.12.10 installed and `.venv` created.
+- Dependencies installed from `requirements.txt`.
+- `.env` created from `.env.example`.
+- `pytest` passed: 5 tests passed.
+- Streamlit returned HTTP 200 at `http://localhost:8501`.
+- `RELIANCE.NS` data loaded through yfinance and the Streamlit render path.
+- Log files created at `logs/app.log` and `logs/data_quality.log`.
+- Phase 1 foundation added: stock universe/fundamentals ORM models, fundamentals ratio helpers, Piotroski F-Score, Altman Z-Score, and tests.
+- `pytest` passed: 12 tests passed.
+- `ruff check src tests` passed.
+- Phase 1 local CSV fundamentals provider added with sample/template data.
+- Fundamentals data quality validator added.
+- Streamlit now displays a fundamentals panel with source visibility and sample-data warnings.
+- `pytest` passed: 19 tests passed.
+- Fundamentals dashboard improved with a watchlist overview, selected-stock drill-down, and annual revenue/net-income trend.
+- `pytest` passed: 20 tests passed.
+- Phase 2 foundation started: technical indicators added (SMA/EMA, RSI, MACD, Bollinger Bands, ATR, relative volume, 52W high).
+- Educational technical signal scanner added for the seven MVP pattern families.
+- Streamlit chart now overlays 20/50/200 EMA and includes Technicals tabs for indicators/signals.
+- `pytest` passed: 24 tests passed.
+- Signal audit storage added with SQLite-backed `signal_audit` table.
+- Streamlit now saves each scan and shows recent signal history in the Signals tab.
+- `pytest` passed: 26 tests passed.
+- Signal audit persistence now upserts repeated same-day rows by symbol/date/signal/source and collapses legacy duplicates when reading older local databases.
+- `ruff check src tests` passed.
+- `ruff format --check src tests` passed.
+- Basic signal history CSV export added for later backtesting.
+- `pytest` passed: 29 tests passed.
+- Streamlit smoke test passed with 0 exceptions and 0 rendered errors.
+- **Phase 1 completed**: sector-relative percentile ranking added (`analytics/fundamentals/sector_ranking.py`). Sample CSV extended to 5 stocks (RELIANCE, TCS, HDFCBANK, INFY, ICICIBANK) with sector/industry/market_cap_bucket columns. Summary builder now includes sector metadata and calls ranking. New "Sector rankings" tab in Streamlit shows 0-100 percentile ranks vs sector/industry/market cap bucket peers.
+- **Phase 2 completed**: signal backtest runner added (`analytics/backtest/signal_backtest.py`). Evaluates forward returns (MFE, MAE, win rate, profit factor) for saved signal observations. New "Signal backtest" tab in Streamlit with holding period selector (5/10/20/60 days), per-signal summary stats, individual trade list, and CSV download.
+- Fundamentals validator updated to treat sector/industry/market_cap_bucket as optional metadata columns (not required financial columns).
+- `pytest` passed: 52 tests passed.
+- `ruff check src tests` passed.
+- `ruff format --check src tests` passed.
+- **Phase 3 completed**: Institutional Flows & Corporate Events panel added.
+  - `data/providers/nse.py`: NSE provider for delivery % (historical equity API), bulk deals, block deals; browser-like session warm-up, graceful fallback to empty DataFrame on network failure.
+  - `data/providers/corporate_actions.py`: yfinance provider for dividends, splits, upcoming earnings calendar, earnings history from income statement.
+  - `analytics/flows/delivery.py`: rolling 20-day MA, z-score, unusual delivery spike flag (>1.5Ã— MA AND â‰¥40%), trend detection.
+  - `analytics/flows/result_volatility.py`: ATR expansion around earnings windows vs baseline; returns event/baseline ATR and volatility multiple.
+  - 3 new ORM tables: `DeliveryData`, `BulkBlockDeal`, `CorporateAction`.
+  - Streamlit: new "Flows & Events" section with Delivery %, Bulk/Block Deals, and Corporate Actions tabs; all NSE fetches use `@st.cache_data` with 1-hour TTL.
+  - `pytest` passed: 76 tests passed.
+  - `ruff check src tests` passed.
+  - `ruff format --check src tests` passed.
+- **Phase 4 completed (MVP)**: config-driven composite scoring engine added.
+  - `scoring/composite.py`: combines fundamentals, technicals, delivery/flow context, event-risk context, and sector context into an explainable 0-100 research score.
+  - Streamlit: new "Composite Score" section with headline score, sub-scores, positive drivers, risks, and missing-data notes.
+  - `tests/test_composite_scoring.py`: verifies score output, missing-data behavior, and UI-ready table conversion.
+  - Streamlit deprecation warnings removed by replacing `use_container_width=True` with `width="stretch"`.
+  - `pytest` passed: 79 tests passed.
+  - `ruff check src tests` passed.
+  - `ruff format --check src tests` passed.
+- Phase 0-4 gap fill completed:
+  - Git is installed locally; local repository initialization is the remaining safe local Phase 0 step before GitHub push.
+  - Stock universe model now includes market cap, listing/delisting dates, index membership, and index entry/exit dates.
+  - Annual and quarterly fundamentals schemas now include EBITDA, EPS, book value, free cash flow, debt, net debt, cash, enterprise value, and related ratios.
+  - Technical indicators now include SMA/EMA 100, ATR %, 20-day historical volatility, 52-week low, all-time high, distance-to-high/low metrics, and MA stack status.
+  - Signal outputs now include educational trigger price, entry zone, stop-loss, target, risk/reward, confidence, data used, risk per share, and position sizing.
+  - `pytest` passed: 79 tests passed.
+  - `ruff check src tests` passed.
+  - `ruff format --check src tests` passed.
+- **Phase 5 completed (MVP)**: strengthened signal backtesting and walk-forward validation.
+  - `analytics/backtest/signal_backtest.py`: added portfolio-level diagnostics: absolute return, CAGR, win rate, average return, max drawdown, Sharpe, Sortino, exposure time, turnover, average holding period, unique symbols, and max symbol concentration.
+  - Added walk-forward validation using a 3-year train / 1-year validation window where enough completed trade history exists.
+  - Streamlit Signal backtest tab now shows portfolio diagnostics and walk-forward validation in addition to per-signal summary and trade rows.
+  - `logs/backtests.log` added for backtest-tagged records.
+  - `docs/phase6_readiness.md` added as a lightweight daily-use, backup, alert, compliance, and deployment-readiness checklist.
+  - `pytest` passed: 81 tests passed.
+  - `ruff check src tests` passed.
+  - `ruff format --check src tests` passed.
+- **Phase 6 completed (MVP)**: added local daily-use readiness and compliance-safe alert previews.
+  - `alerts/rules.py`: builds alert preview rows for strong research candidates, active technical signals, and data-quality warnings. No Telegram/email messages are sent yet.
+  - `ops/health.py`: checks local project state, `.env`, sample data, SQLite database, logs folder, Git repository, and Git identity.
+  - Streamlit: new "Operations & Alerts" section with alert previews, setup health checks, and backup/GitHub commands.
+  - `scripts/health_check.ps1`: prints a beginner-readable local health report.
+  - `scripts/backup_local.ps1`: creates a local backup of project state, docs, config, sample data, and SQLite signal history.
+  - `README.md` and `docs/phase6_readiness.md` updated for Phase 6.
+  - `pytest` passed: 87 tests passed.
+  - `ruff check src tests` passed.
+  - `ruff format --check src tests` passed.
+  - Streamlit AppTest passed with 0 exceptions and 0 rendered errors.
+  - Localhost returned HTTP 200 at `http://localhost:8501`.
+  - Backup verified at `backups/20260425-222512`.
+- **Master prompt audit pass completed**:
+  - `docs/master_prompt_audit.md` added with phase-by-phase complete / partial / deferred status.
+  - Streamlit Operations & Alerts now includes a "Data provenance" tab showing source, freshness, status, caveat, and generated timestamp for major outputs.
+  - `ops/provenance.py` added for UI-ready provenance summaries.
+  - `docs/compliance.md` corrected: full raw-response provenance is still open; the current UI source/provenance summary is complete for major local outputs.
+  - `config/data_sources.yaml` corrected so yfinance corporate actions are active and NSE bulk/block deals are marked partial.
+  - `pytest` passed: 89 tests passed.
+  - `ruff check src tests` passed.
+  - `ruff format --check src tests` passed.
+  - Streamlit AppTest passed with 0 exceptions and 0 rendered errors.
+- **Phase 7 completed**: Real fundamentals data via yfinance + institutional holdings.
+  - `data/providers/yfinance_fundamentals.py`: `YFinanceFundamentalsProvider` reads `income_stmt`, `balance_sheet`, `cashflow` from yfinance; maps to `FundamentalSnapshot` schema; handles Indian fiscal year (Apr–Mar); derives net_debt, enterprise_value, market_cap_bucket; falls back to empty DataFrame on any error.
+  - `data/providers/institutional_holdings.py`: `get_major_holders`, `get_institutional_holders`, `get_mutualfund_holders`, `holdings_summary` via yfinance; normalises column names across yfinance versions; graceful empty-DataFrame fallback.
+  - `data/providers/__init__.py`: exports all new providers.
+  - `analytics/fundamentals/summary.py`: uses structural `_FundamentalsProviderLike` Protocol so any provider works (not just `CsvFundamentalsProvider`).
+  - Streamlit: fundamentals section now tries yfinance first (1-hour cache), falls back to CSV; shows "yfinance (live)" source badge. New "Holdings" tab in Flows & Events shows insider %, institution %, float %, top institutional holders, and top MF holders. Provenance table reflects the live source label.
+  - `tests/test_yfinance_fundamentals.py`: 15 tests (fiscal year mapping, market_cap_bucket, row build, net_debt derivation, snapshot typing, empty-on-error).
+  - `tests/test_institutional_holdings.py`: 9 tests (major/institutional/MF holders, holdings_summary, graceful fallback).
+  - `pytest` passed: 113 tests passed.
+  - `ruff check src tests` passed.
+  - `ruff format --check src tests` passed.
+
+---
+
+## Completed tasks
+
+- [x] Project scaffold created (folders, configs, VS Code settings, placeholders)
+- [x] Python installed and `python --version` works in terminal
+- [x] Git installed and `git --version` works
+- [ ] VS Code installed with recommended extensions
+- [x] Virtual environment created (`.venv`)
+- [x] Dependencies installed from `requirements.txt`
+- [x] `.env` created from `.env.example`
+- [x] First run of `streamlit run src/stock_platform/ui/streamlit_app.py` succeeded
+- [x] `RELIANCE.NS` chart visible on `localhost:8501`
+- [x] Log file created at `logs/app.log`
+- [x] Phase 1 stock universe and fundamentals schema foundation added
+- [x] Phase 1 basic ratios, growth, Piotroski, and Altman calculations added
+- [x] Phase 1 local CSV fundamentals provider added
+- [x] Fundamentals source and missing-data warnings visible in UI
+- [x] Fundamentals watchlist overview and selected-stock trend view added
+- [x] Phase 2 technical indicators added
+- [x] Phase 2 educational signal scanner added
+- [x] Technical overlays and signal table visible in UI
+- [x] Signal audit storage added
+- [x] Recent signal history visible in UI
+- [x] Repeated same-day signal audit rows are deduplicated/upserted
+- [x] Basic signal history CSV export available from the Signals tab
+- [x] Phase 3 delivery % analytics, bulk/block deals, corporate actions added
+- [x] Phase 4 composite research score added
+- [x] Composite score explainability panel visible in UI
+- [x] Phase 0-4 prompt-gap pass completed for locally implementable MVP items
+- [x] Local Git repository initialized
+- [x] Phase 5 portfolio-level backtest diagnostics added
+- [x] Phase 5 walk-forward validation added
+- [x] Phase 6 readiness checklist added
+- [x] Phase 6 alert preview rules added
+- [x] Phase 6 local health-check helper added
+- [x] Phase 6 local backup helper added
+- [x] Operations & Alerts section visible in Streamlit
+- [x] Data provenance tab visible in Streamlit
+- [x] Master prompt audit document added
+- [ ] Initial commit pushed to private GitHub repo
+
+---
+
+## Open issues / blockers
+
+- PowerShell `CurrentUser` execution policy could not be changed in this environment; use process-scoped policy or run the app through `.venv\Scripts\python.exe -m streamlit ...`.
+- Running `.ps1` scripts directly may be blocked by Windows execution policy. Use a temporary process-only bypass when needed: `powershell -ExecutionPolicy Bypass -File .\scripts\health_check.ps1`.
+- Local Git repository is initialized, but no private GitHub remote is connected yet.
+- Git `user.name` and `user.email` are not configured locally yet, so the first commit needs those values before committing.
+
+---
+
+## Data sources connected
+
+| Source | Status | Used for | Notes |
+|---|---|---|---|
+| yfinance | connected | OHLCV prices (MVP) | Verified with `RELIANCE.NS`; adjusted prices still need review before research use |
+| local CSV | connected | Fundamentals sample/template | Safe Phase 1 bridge; current sample rows are placeholders, not verified source data |
+| NSE equity API | connected | Delivery %, bulk/block deals | Phase 3; requires live network + browser-like session |
+| Screener.in | not yet | Fundamentals | Phase 1; verify ToS before connecting |
+| AMFI | not yet | MF holdings | Phase 4 |
+| SEBI PIT | not yet | Insider trades | Phase 4 |
+
+---
+
+## Database
+
+- **Target**: PostgreSQL 16+ (managed: Supabase or Neon for production)
+- **Current**: SQLite fallback path configured through `DATABASE_URL`
+- **Phase 1 status**: stock universe and fundamentals schema foundation added; migrations and real provider still pending
+- **Phase 2 status**: signal audit rows are saved to local SQLite at `data/stock_platform.db`; repeated same-day scans are upserted instead of duplicated
+
+---
+
+## Known limitations
+
+- Fundamentals provider currently uses local CSV sample/template data only; real source selection and ToS review pending
+- Phase 2 signals are educational pattern observations only; no backtest or recommendation engine yet
+- NSE delivery % and bulk/block deal APIs require live network and may fail if NSE blocks automated requests; UI degrades gracefully to "data unavailable" messages
+- Composite scoring, entry-zone, stop-loss, target-zone, risk/reward, and position-sizing MVPs exist; they remain educational approximations until validated with real data and backtests
+- Full raw-response storage with URL/timestamp provenance is not complete yet; the UI now shows a provenance summary for major local outputs.
+- Phase 6 alerts are preview-only. No Telegram/email delivery exists yet because alert compliance wording, rate limits, and user preferences must be reviewed first.
+
+---
+
+## Model / scoring weight history
+
+| Date | Change | Reason |
+|---|---|---|
+| - | Initial weights in `config/scoring_weights.yaml` | Phase 0 placeholder |
+
+---
+
+## Backtest assumptions
+
+- Signal backtests currently use saved signal events from local signal history.
+- Entry price uses the stored signal close.
+- Exit price uses the close after the selected fixed holding period.
+- Forward bars are strictly after the signal date to reduce look-ahead bias.
+- MFE/MAE use high/low within the holding window.
+- Walk-forward validation uses 3 calendar years for train and the next 1 calendar year for validation when enough completed trade history exists.
+- Current results are small-sample and educational until the platform has historical signal events across many stocks and regimes.
+- Phase 6 alert previews must not be treated as backtested live alerts. They are readiness checks for future notification delivery.
+
+---
+
+## Outstanding compliance concerns
+
+- [x] Disclaimer text is present in UI (Phase 0)
+- [ ] Disclaimer text reviewed against SEBI RA/RIA guidelines before any monetization
+- [ ] Data source ToS reviewed before any redistribution
+- [ ] Legal review required before opening platform to any third party
+
+---
+
+## Current folder structure
+
+See `README.md` -> "Folder structure".
+
+---
+
+## Current commands to run the app
+
+```powershell
+# from the project root
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process -Force
+.\.venv\Scripts\python.exe -m streamlit run src\stock_platform\ui\streamlit_app.py
+```
+
+## Current commands for daily health / backup
+
+```powershell
+# health check
+powershell -ExecutionPolicy Bypass -File .\scripts\health_check.ps1
+
+# local backup
+powershell -ExecutionPolicy Bypass -File .\scripts\backup_local.ps1
+```
+
+---
+
+## Next planned task
+
+Configure Git `user.name` and `user.email`, connect a private GitHub remote, make the first commit, and push the verified local MVP.
