@@ -38,6 +38,13 @@ class FundamentalSnapshot:
     market_cap: float | None = None
     enterprise_value: float | None = None
 
+    # Working-capital components (added Phase 7+ gap fill)
+    accounts_receivable: float | None = None
+    inventory: float | None = None
+    accounts_payable: float | None = None
+    interest_expense: float | None = None
+    cost_of_revenue: float | None = None
+
 
 @dataclass(frozen=True)
 class ScoreResult:

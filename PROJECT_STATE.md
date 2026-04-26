@@ -118,6 +118,19 @@
   - `pytest` passed: 113 tests passed.
   - `ruff check src tests` passed.
   - `ruff format --check src tests` passed.
+- **Master prompt gap-fill pass (Phase 0–7) completed**:
+  - `analytics/fundamentals/cagr.py`: multi-year CAGR (3Y / 5Y / 10Y) for Revenue, EBITDA, Net income, EPS, OCF, FCF, Book value. Returns None when fewer than the required years exist or when start ≤ 0.
+  - `analytics/fundamentals/extended_ratios.py`: interest coverage, DSO/DIO/DPO, cash conversion cycle (days), working capital trend (latest, prior-year, YoY change, 3Y slope), `compute_extended_health()` composite.
+  - `analytics/fundamentals/schema.py`: `FundamentalSnapshot` extended with `accounts_receivable`, `inventory`, `accounts_payable`, `interest_expense`, `cost_of_revenue`.
+  - `data/providers/yfinance_fundamentals.py`: maps `Interest Expense`, `Cost Of Revenue`, `Accounts Receivable`, `Inventory`, `Accounts Payable` from yfinance.
+  - `analytics/technicals/structure.py`: `detect_swing_pivots()`, `find_support_resistance_zones()`, `latest_swing_levels()` for fractal-based price structure analysis.
+  - Streamlit: fundamentals "Selected stock" tab now shows multi-year CAGR table + extended balance-sheet health (interest coverage, CCC, working capital, DSO/DIO/DPO). Technicals section gains a new "Price structure" tab with last swing high/low and clustered S/R zones.
+  - `tests/test_cagr.py`: 9 tests covering CAGR edge cases.
+  - `tests/test_extended_ratios.py`: 10 tests covering interest coverage, CCC, working capital trend.
+  - `tests/test_price_structure.py`: 8 tests covering swing pivots and zone clustering.
+  - `pytest` passed: 140 tests passed.
+  - `ruff check src tests` passed.
+  - `ruff format --check src tests` passed.
 
 ---
 

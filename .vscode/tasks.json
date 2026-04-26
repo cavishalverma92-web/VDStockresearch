@@ -1,0 +1,48 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Install dependencies",
+            "type": "shell",
+            "command": "${command:python.interpreterPath}",
+            "args": ["-m", "pip", "install", "-r", "requirements.txt"],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Run Streamlit app",
+            "type": "shell",
+            "command": "${command:python.interpreterPath}",
+            "args": ["-m", "streamlit", "run", "src/stock_platform/ui/streamlit_app.py"],
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            }
+        },
+        {
+            "label": "Run tests",
+            "type": "shell",
+            "command": "${command:python.interpreterPath}",
+            "args": ["-m", "pytest"],
+            "group": { "kind": "test", "isDefault": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "Lint (ruff)",
+            "type": "shell",
+            "command": "${command:python.interpreterPath}",
+            "args": ["-m", "ruff", "check", "src", "tests"],
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "Format (ruff)",
+            "type": "shell",
+            "command": "${command:python.interpreterPath}",
+            "args": ["-m", "ruff", "format", "src", "tests"],
+            "problemMatcher": []
+        }
+    ]
+}

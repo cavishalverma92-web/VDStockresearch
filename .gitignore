@@ -98,6 +98,9 @@ $RECYCLE.BIN/
 # ---- Streamlit ----
 .streamlit/secrets.toml
 
+# ---- Claude Code (local config only) ----
+.claude/
+
 # ---- Temp ----
 tmp/
 .tmp/

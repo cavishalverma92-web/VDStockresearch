@@ -32,6 +32,8 @@ _INCOME_MAP: dict[str, str] = {
     "Net Income": "net_income",
     "Diluted EPS": "eps",
     "Basic EPS": "eps",  # fallback when diluted is absent
+    "Interest Expense": "interest_expense",
+    "Cost Of Revenue": "cost_of_revenue",
 }
 
 _BALANCE_MAP: dict[str, str] = {
@@ -44,6 +46,9 @@ _BALANCE_MAP: dict[str, str] = {
     "Total Debt": "debt",
     "Cash And Cash Equivalents": "cash_and_equivalents",
     "Common Stock Equity": "book_value",
+    "Accounts Receivable": "accounts_receivable",
+    "Inventory": "inventory",
+    "Accounts Payable": "accounts_payable",
 }
 
 _CASHFLOW_MAP: dict[str, str] = {
@@ -77,6 +82,11 @@ _ANNUAL_COLUMNS = [
     "shares_outstanding",
     "market_cap",
     "enterprise_value",
+    "accounts_receivable",
+    "inventory",
+    "accounts_payable",
+    "interest_expense",
+    "cost_of_revenue",
     "sector",
     "industry",
     "market_cap_bucket",
@@ -216,6 +226,11 @@ class YFinanceFundamentalsProvider(FundamentalsDataProvider):
                     shares_outstanding=_f(row.get("shares_outstanding")),
                     market_cap=_f(row.get("market_cap")),
                     enterprise_value=_f(row.get("enterprise_value")),
+                    accounts_receivable=_f(row.get("accounts_receivable")),
+                    inventory=_f(row.get("inventory")),
+                    accounts_payable=_f(row.get("accounts_payable")),
+                    interest_expense=_f(row.get("interest_expense")),
+                    cost_of_revenue=_f(row.get("cost_of_revenue")),
                 )
             )
         return snapshots

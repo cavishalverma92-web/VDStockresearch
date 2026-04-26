@@ -54,6 +54,8 @@ from stock_platform.analytics.fundamentals import (  # noqa: E402
     calculate_basic_ratios,
     calculate_growth,
     calculate_piotroski_f_score,
+    compute_extended_health,
+    compute_multi_year_cagr,
 )
 from stock_platform.analytics.fundamentals.sector_ranking import sector_rank_summary  # noqa: E402
 from stock_platform.analytics.fundamentals.summary import build_fundamentals_summary  # noqa: E402
@@ -64,7 +66,11 @@ from stock_platform.analytics.signals.audit import (  # noqa: E402
     fetch_signal_event_export,
     save_signal_audit,
 )
-from stock_platform.analytics.technicals import add_technical_indicators  # noqa: E402
+from stock_platform.analytics.technicals import (  # noqa: E402
+    add_technical_indicators,
+    find_support_resistance_zones,
+    latest_swing_levels,
+)
 from stock_platform.config import (  # noqa: E402
     ROOT_DIR,
     get_settings,
@@ -466,6 +472,67 @@ with selected_tab:
         r3.metric("Debt / Equity", _format_number(ratios["debt_to_equity"]))
         r4.metric("Source", source)
 
+        # Multi-year CAGR (master prompt §4.1)
+        st.markdown("##### Multi-year CAGR")
+        cagr_all = compute_multi_year_cagr(snapshots)
+        cagr_metrics = [
+            ("revenue", "Revenue"),
+            ("ebitda", "EBITDA"),
+            ("net_income", "Net income"),
+            ("eps", "EPS"),
+            ("operating_cash_flow", "OCF"),
+            ("free_cash_flow", "FCF"),
+            ("book_value", "Book value"),
+        ]
+        cagr_rows = []
+        for key, label in cagr_metrics:
+            cagr_rows.append(
+                {
+                    "Metric": label,
+                    "3Y CAGR": _format_pct(cagr_all.get(f"{key}_cagr_3y")),
+                    "5Y CAGR": _format_pct(cagr_all.get(f"{key}_cagr_5y")),
+                    "10Y CAGR": _format_pct(cagr_all.get(f"{key}_cagr_10y")),
+                }
+            )
+        st.dataframe(cagr_rows, hide_index=True, width="stretch")
+        st.caption(
+            "CAGR returns 'N/A' when fewer than the required years of data are "
+            "available, or when the start value is zero/negative."
+        )
+
+        # Extended balance-sheet health (master prompt §4.1)
+        st.markdown("##### Balance-sheet health (extended)")
+        ext = compute_extended_health(snapshots)
+        e1, e2, e3, e4 = st.columns(4)
+        e1.metric(
+            "Interest coverage",
+            f"{ext['interest_coverage']:.1f}×" if ext["interest_coverage"] is not None else "N/A",
+            help="EBIT / |Interest expense|. >5× is healthy; <1.5× is a red flag.",
+        )
+        e2.metric(
+            "Cash conv. cycle",
+            f"{ext['ccc_days']:.0f} d" if ext["ccc_days"] is not None else "N/A",
+            help="DSO + DIO − DPO (days). Lower is better; negative is excellent.",
+        )
+        e3.metric(
+            "Working capital",
+            f"₹{ext['working_capital_latest']:,.0f}"
+            if ext["working_capital_latest"] is not None
+            else "N/A",
+        )
+        e4.metric(
+            "WC YoY change",
+            _format_pct(ext["working_capital_yoy_change"]),
+            help="Change in working capital vs. prior fiscal year.",
+        )
+
+        if ext["dso_days"] is not None:
+            st.caption(
+                f"DSO: {ext['dso_days']:.0f}d  |  "
+                f"DIO: {ext['dio_days']:.0f}d  |  "
+                f"DPO: {ext['dpo_days']:.0f}d"
+            )
+
         trend_fig = go.Figure()
         trend_fig.add_trace(
             go.Bar(
@@ -752,7 +819,9 @@ st.plotly_chart(fig, width="stretch")
 st.subheader("Technicals")
 st.caption("Educational pattern observations only; not investment advice.")
 
-tech_tab, signal_tab, backtest_tab = st.tabs(["Indicators", "Signals", "Signal backtest"])
+tech_tab, structure_tab, signal_tab, backtest_tab = st.tabs(
+    ["Indicators", "Price structure", "Signals", "Signal backtest"]
+)
 
 with tech_tab:
     t1, t2, t3, t4 = st.columns(4)
@@ -774,6 +843,50 @@ with tech_tab:
         "52W high gap", _format_pct(latest_technical.get("distance_from_52w_high_pct") / 100)
     )
     t12.metric("MA stack", str(latest_technical.get("ma_stack_status", "mixed")).title())
+
+with structure_tab:
+    st.caption(
+        "Swing pivots and clustered support/resistance zones from the last "
+        "year of price history. Educational only — confirm with your own chart reading."
+    )
+    last_swings = latest_swing_levels(df, window=5)
+    sr_zones = find_support_resistance_zones(df, window=5, lookback=252, max_zones=4)
+
+    sw1, sw2, sw3 = st.columns(3)
+    sw1.metric(
+        "Last swing high",
+        _format_currency(last_swings["last_swing_high"]),
+    )
+    sw2.metric(
+        "Last swing low",
+        _format_currency(last_swings["last_swing_low"]),
+    )
+    sw3.metric(
+        "Current close",
+        _format_currency(float(df["close"].iloc[-1]) if not df.empty else None),
+    )
+
+    sr_col1, sr_col2 = st.columns(2)
+    with sr_col1:
+        st.markdown("##### Resistance zones (above)")
+        if not sr_zones["resistance"]:
+            st.info("No resistance zones detected in the lookback window.")
+        else:
+            st.dataframe(
+                [{"Level (₹)": round(p, 2)} for p in sr_zones["resistance"]],
+                hide_index=True,
+                width="stretch",
+            )
+    with sr_col2:
+        st.markdown("##### Support zones (below)")
+        if not sr_zones["support"]:
+            st.info("No support zones detected in the lookback window.")
+        else:
+            st.dataframe(
+                [{"Level (₹)": round(p, 2)} for p in sr_zones["support"]],
+                hide_index=True,
+                width="stretch",
+            )
 
 with signal_tab:
     signal_rows = [
