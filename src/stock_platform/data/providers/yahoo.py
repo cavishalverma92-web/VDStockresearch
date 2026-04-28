@@ -73,5 +73,16 @@ class YahooFinanceProvider(PriceDataProvider):
         df.index = pd.to_datetime(df.index).tz_localize(None)
         df.index.name = "date"
 
+        critical_price_columns = ["open", "high", "low", "close", "adj_close"]
+        incomplete_rows = df[critical_price_columns].isna().any(axis=1)
+        if incomplete_rows.any():
+            dropped = int(incomplete_rows.sum())
+            log.warning(
+                "yfinance returned {} incomplete OHLC row(s) for {}; dropping them",
+                dropped,
+                symbol,
+            )
+            df = df.loc[~incomplete_rows].copy()
+
         log.info("yfinance: got {} rows for {}", len(df), symbol)
         return df

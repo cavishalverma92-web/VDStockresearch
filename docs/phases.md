@@ -129,3 +129,46 @@
 - [ ] User-specific watchlists (first SaaS-aware touch)
 
 **Exit criteria:** stable daily use, reliable jobs, documented compliance boundaries.
+
+---
+
+## Phase 7 - Real Fundamentals and Ownership Data
+
+**Goal:** Move beyond sample CSV fundamentals while keeping safe fallbacks.
+
+- [x] yfinance fundamentals provider
+- [x] CSV fallback remains available
+- [x] Institutional / mutual fund holder views where yfinance provides data
+- [x] Multi-year CAGR
+- [x] Extended balance-sheet health metrics
+- [x] Price-structure gap fill
+- [x] Sector-aware fundamentals validation for banks/financial services
+- [x] Bank-safe UI handling for industrial ratios that are not applicable
+- [x] Financial-sector branch in composite fundamentals scoring
+
+**Remaining gaps:** yfinance coverage is uneven for Indian stocks; verified official / paid
+fundamentals source still needs ToS and reliability review. Bank-specific fields
+such as NIM, GNPA, NNPA, CASA, and capital adequacy still need a better source.
+
+---
+
+## Phase 8 - Universe Opportunity Scanner
+
+**Goal:** Scan configured universes and rank stocks by the existing research pipeline.
+
+- [x] `config/universes.yaml` seed universe lists
+- [x] Scanner module for configured universes and custom symbol lists
+- [x] OHLCV validation before per-symbol scoring
+- [x] Per-symbol graceful failure handling
+- [x] Top Opportunities Streamlit expander
+- [x] CSV-backed `all_nse_listed` universe from NSE `EQUITY_L.csv`
+- [x] Saved scanner runs/results in SQLite
+- [x] Latest saved scan view in Streamlit
+- [x] Latest-vs-previous saved scan comparison
+- [x] Saved-scan filters for comparison status, score change, and newly active signals
+- [x] Local research shortlist from scanner rows
+- [x] CSV export of scan results
+
+**Remaining gaps:** configured universe lists must be refreshed from official NSE files
+before being treated as current index membership; universe-wide fundamentals/flows are
+limited; shortlist note editing/removal is not added yet.

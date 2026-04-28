@@ -47,6 +47,29 @@ class FundamentalSnapshot:
 
 
 @dataclass(frozen=True)
+class BankingFundamentalSnapshot:
+    """One annual bank/financial-services metrics snapshot.
+
+    Percent fields are represented as percentages, e.g. 3.5 means 3.5%.
+    These values should come from an auditable manual CSV or verified provider,
+    not inferred from industrial financial statements.
+    """
+
+    symbol: str
+    fiscal_year: int
+    nim_pct: float | None = None
+    gnpa_pct: float | None = None
+    nnpa_pct: float | None = None
+    casa_pct: float | None = None
+    credit_growth_pct: float | None = None
+    deposit_growth_pct: float | None = None
+    capital_adequacy_pct: float | None = None
+    source: str | None = None
+    source_url: str | None = None
+    last_updated: str | None = None
+
+
+@dataclass(frozen=True)
 class ScoreResult:
     """A score plus the criteria that could not be computed."""
 

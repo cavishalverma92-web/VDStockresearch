@@ -4,6 +4,10 @@ All application code must go through the abstract base classes defined here.
 Never import yfinance / NSE / Screener directly in feature modules.
 """
 
+from stock_platform.data.providers.banking_fundamentals import (
+    BANKING_FUNDAMENTAL_COLUMNS,
+    CsvBankingFundamentalsProvider,
+)
 from stock_platform.data.providers.base import FundamentalsDataProvider, PriceDataProvider
 from stock_platform.data.providers.corporate_actions import (
     get_dividends,
@@ -28,6 +32,8 @@ from stock_platform.data.providers.yfinance_fundamentals import YFinanceFundamen
 
 __all__ = [
     "CsvFundamentalsProvider",
+    "CsvBankingFundamentalsProvider",
+    "BANKING_FUNDAMENTAL_COLUMNS",
     "FundamentalsDataProvider",
     "PriceDataProvider",
     "YahooFinanceProvider",

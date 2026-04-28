@@ -85,3 +85,29 @@ def test_non_positive_revenue_fails() -> None:
 
     assert not report.ok
     assert "non_positive_revenue" in report.errors
+
+
+def test_financial_sector_does_not_require_industrial_columns() -> None:
+    frame = pd.DataFrame(
+        [
+            {
+                "symbol": "HDFCBANK.NS",
+                "sector": "Financial Services",
+                "industry": "Banks - Private Sector",
+                "fiscal_year": 2025,
+                "revenue": 100,
+                "net_income": 20,
+                "total_assets": 1_000,
+                "total_liabilities": 900,
+                "shares_outstanding": 10,
+                "market_cap": 1_500,
+                "source": "yfinance",
+            }
+        ]
+    )
+
+    report = validate_annual_fundamentals(frame, "HDFCBANK.NS", raise_on_error=False)
+
+    assert report.ok
+    assert report.errors == []
+    assert "financial_sector_rules_applied" in report.warnings

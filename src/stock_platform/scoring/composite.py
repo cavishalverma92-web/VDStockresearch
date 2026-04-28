@@ -12,6 +12,7 @@ from typing import Any
 
 import pandas as pd
 
+from stock_platform.analytics.fundamentals.sector_policy import is_financial_sector
 from stock_platform.analytics.signals import SignalResult
 from stock_platform.config import get_scoring_weights
 
@@ -33,6 +34,7 @@ def score_stock(
     *,
     symbol: str,
     fundamentals: Mapping[str, Any] | None,
+    banking_fundamentals: Mapping[str, Any] | None = None,
     technicals: Mapping[str, Any] | pd.Series | None,
     signals: list[SignalResult],
     delivery: Mapping[str, Any] | None = None,
@@ -47,7 +49,13 @@ def score_stock(
     risks: list[str] = []
 
     sub_scores = {
-        "fundamentals": _fundamentals_score(fundamentals, reasons, risks, missing),
+        "fundamentals": _fundamentals_score(
+            fundamentals,
+            banking_fundamentals,
+            reasons,
+            risks,
+            missing,
+        ),
         "technicals": _technicals_score(technicals, signals, reasons, risks, missing),
         "flows": _flows_score(delivery, reasons, risks, missing),
         "events_quality": _events_score(result_volatility, reasons, risks, missing),
@@ -88,6 +96,7 @@ def composite_scores_to_frame(scores: list[CompositeScore]) -> pd.DataFrame:
 
 def _fundamentals_score(
     row: Mapping[str, Any] | None,
+    banking_row: Mapping[str, Any] | None,
     reasons: list[str],
     risks: list[str],
     missing: list[str],
@@ -96,20 +105,33 @@ def _fundamentals_score(
         missing.append("fundamentals")
         return 50.0
 
+    financial_sector = is_financial_sector(row=row)
     parts: list[float] = []
     parts.append(_scale(_num(row.get("piotroski_f_score")), low=0, high=9))
-    parts.append(_altman_score(_num(row.get("altman_z_score"))))
+    if financial_sector:
+        reasons.append("Using financial-sector fundamental scoring.")
+    else:
+        parts.append(_altman_score(_num(row.get("altman_z_score"))))
     parts.append(_scale(_first_num(row, ["roe_pct_sector_rank", "roe_pct"]), low=0, high=100))
+    parts.append(_scale(_first_num(row, ["roa_pct_sector_rank", "roa_pct"]), low=0, high=100))
     parts.append(
         _scale(_first_num(row, ["revenue_growth_pct_sector_rank", "revenue_growth_pct"]), 0, 100)
     )
-    debt_rank = _first_num(row, ["debt_to_equity_sector_rank"])
-    debt_score = (
-        debt_rank
-        if debt_rank is not None
-        else _inverse_scale(_num(row.get("debt_to_equity")), 0, 2)
-    )
-    parts.append(debt_score)
+    if financial_sector:
+        banking_score = _banking_metrics_score(banking_row, reasons, risks, missing)
+        if banking_score is not None:
+            parts.append(banking_score)
+            parts.append(banking_score)
+        else:
+            reasons.append("Banking metrics missing; score uses general financial-sector fallback.")
+    if not financial_sector:
+        debt_rank = _first_num(row, ["debt_to_equity_sector_rank"])
+        debt_score = (
+            debt_rank
+            if debt_rank is not None
+            else _inverse_scale(_num(row.get("debt_to_equity")), 0, 2)
+        )
+        parts.append(debt_score)
 
     valid = [value for value in parts if value is not None]
     if not valid:
@@ -120,12 +142,117 @@ def _fundamentals_score(
     if piotroski is not None and piotroski >= 7:
         reasons.append(f"Strong Piotroski F-Score ({piotroski:.0f}/9).")
     altman = _num(row.get("altman_z_score"))
-    if altman is not None and altman < 1.8:
+    if not financial_sector and altman is not None and altman < 1.8:
         risks.append(f"Low Altman Z-Score ({altman:.2f}) signals balance-sheet caution.")
     if str(row.get("status", "")).lower() == "sample":
         missing.append("verified fundamentals source")
 
     return sum(valid) / len(valid)
+
+
+def _banking_metrics_score(
+    row: Mapping[str, Any] | None,
+    reasons: list[str],
+    risks: list[str],
+    missing: list[str],
+) -> float | None:
+    """Score bank-specific metrics from audited/manual CSV rows."""
+    if not row:
+        missing.append("manual banking metrics")
+        return None
+
+    parts: list[float] = []
+    source = str(row.get("source") or "").strip()
+    last_updated = str(row.get("last_updated") or "").strip()
+    if source:
+        reasons.append(
+            "Manual banking metrics source: "
+            + source
+            + (f" (updated {last_updated})." if last_updated else ".")
+        )
+    else:
+        missing.append("banking metrics source")
+
+    nim = _num(row.get("nim_pct"))
+    if nim is None:
+        missing.append("NIM")
+    else:
+        parts.append(_scale(nim, 2.5, 5.0))
+        if nim >= 3.5:
+            reasons.append(f"Banking NIM is healthy at {nim:.2f}%.")
+
+    gnpa = _num(row.get("gnpa_pct"))
+    if gnpa is None:
+        missing.append("GNPA")
+    else:
+        parts.append(_inverse_scale(gnpa, 0.0, 8.0))
+        if gnpa <= 2.0:
+            reasons.append(f"GNPA is contained at {gnpa:.2f}%.")
+        elif gnpa >= 5.0:
+            risks.append(f"GNPA is elevated at {gnpa:.2f}%.")
+
+    nnpa = _num(row.get("nnpa_pct"))
+    if nnpa is None:
+        missing.append("NNPA")
+    else:
+        parts.append(_inverse_scale(nnpa, 0.0, 4.0))
+        if nnpa <= 1.0:
+            reasons.append(f"NNPA is contained at {nnpa:.2f}%.")
+        elif nnpa >= 2.0:
+            risks.append(f"NNPA is elevated at {nnpa:.2f}%.")
+
+    casa = _num(row.get("casa_pct"))
+    if casa is None:
+        missing.append("CASA")
+    else:
+        parts.append(_scale(casa, 25.0, 50.0))
+        if casa >= 35.0:
+            reasons.append(f"CASA ratio is supportive at {casa:.2f}%.")
+
+    capital = _num(row.get("capital_adequacy_pct"))
+    if capital is None:
+        missing.append("capital adequacy")
+    else:
+        parts.append(_scale(capital, 12.0, 22.0))
+        if capital >= 15.0:
+            reasons.append(f"Capital adequacy is comfortable at {capital:.2f}%.")
+        elif capital < 13.0:
+            risks.append(f"Capital adequacy is thin at {capital:.2f}%.")
+
+    credit_growth = _num(row.get("credit_growth_pct"))
+    deposit_growth = _num(row.get("deposit_growth_pct"))
+    growth_score = _bank_growth_balance_score(credit_growth, deposit_growth)
+    if growth_score is None:
+        missing.append("credit/deposit growth")
+    else:
+        parts.append(growth_score)
+        if (
+            credit_growth is not None
+            and deposit_growth is not None
+            and credit_growth > deposit_growth + 8.0
+        ):
+            risks.append(
+                "Credit growth is materially faster than deposit growth; funding mix needs review."
+            )
+        elif growth_score >= 70:
+            reasons.append("Credit and deposit growth are reasonably balanced.")
+
+    valid = [value for value in parts if value is not None]
+    return sum(valid) / len(valid) if valid else None
+
+
+def _bank_growth_balance_score(
+    credit_growth: float | None,
+    deposit_growth: float | None,
+) -> float | None:
+    if credit_growth is None or deposit_growth is None:
+        return None
+    credit_score = _scale(credit_growth, -5.0, 25.0)
+    deposit_score = _scale(deposit_growth, -5.0, 25.0)
+    if credit_score is None or deposit_score is None:
+        return None
+    gap_penalty = min(35.0, abs(credit_growth - deposit_growth) * 3.0)
+    return max(0.0, ((credit_score + deposit_score) / 2.0) - gap_penalty)
 
 
 def _technicals_score(

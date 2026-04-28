@@ -56,9 +56,25 @@ from stock_platform.analytics.fundamentals import (  # noqa: E402
     calculate_piotroski_f_score,
     compute_extended_health,
     compute_multi_year_cagr,
+    is_financial_sector,
 )
 from stock_platform.analytics.fundamentals.sector_ranking import sector_rank_summary  # noqa: E402
 from stock_platform.analytics.fundamentals.summary import build_fundamentals_summary  # noqa: E402
+from stock_platform.analytics.scanner import (  # noqa: E402
+    add_symbols_to_watchlist,
+    build_daily_research_brief,
+    compare_latest_universe_scans,
+    daily_brief_table,
+    enrich_watchlist_with_latest_scores,
+    fetch_watchlist_items,
+    list_available_universes,
+    load_universe,
+    save_universe_scan,
+    scan_results_to_frame,
+    scan_universe,
+    update_watchlist_reviews,
+    watchlist_to_frame,
+)
 from stock_platform.analytics.signals import scan_technical_signals  # noqa: E402
 from stock_platform.analytics.signals.audit import (  # noqa: E402
     audits_to_frame,
@@ -78,6 +94,7 @@ from stock_platform.config import (  # noqa: E402
     get_universe_config,
 )
 from stock_platform.data.providers import (  # noqa: E402
+    CsvBankingFundamentalsProvider,
     CsvFundamentalsProvider,
     YahooFinanceProvider,
     YFinanceFundamentalsProvider,
@@ -102,10 +119,14 @@ from stock_platform.data.providers.nse import (  # noqa: E402
 from stock_platform.data.validators import (  # noqa: E402
     OHLCVValidationError,
     validate_annual_fundamentals,
+    validate_banking_fundamentals,
     validate_ohlcv,
 )
 from stock_platform.ops import (  # noqa: E402
+    build_data_trust_rows,
     build_provenance_rows,
+    data_trust_level,
+    data_trust_rows_to_frame,
     provenance_rows_to_frame,
     run_health_checks,
 )
@@ -145,6 +166,12 @@ def _load_deals(sym: str) -> pd.DataFrame:
     return fetch_deals_for_symbol(sym)
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _load_banking_fundamentals(sym: str) -> pd.DataFrame:
+    provider = CsvBankingFundamentalsProvider()
+    return provider.get_banking_fundamentals(sym)
+
+
 def _resolve_project_path(path_value: str) -> Path:
     path = Path(path_value)
     return path if path.is_absolute() else ROOT_DIR / path
@@ -152,6 +179,10 @@ def _resolve_project_path(path_value: str) -> Path:
 
 def _format_pct(value: float | None) -> str:
     return "N/A" if value is None or pd.isna(value) else f"{value * 100:.1f}%"
+
+
+def _format_pct_points(value: float | None) -> str:
+    return "N/A" if value is None or pd.isna(value) else f"{value:.2f}%"
 
 
 def _format_number(value: float | None) -> str:
@@ -173,6 +204,13 @@ def _format_rank(value: float | None) -> str:
     return f"{value:.0f}th %ile"
 
 
+def _format_days(value: float | None) -> str:
+    """Format a days metric that may be missing from live fundamentals data."""
+    if value is None or pd.isna(value):
+        return "N/A"
+    return f"{value:.0f}d"
+
+
 def _unique_symbols(symbols: list[str]) -> list[str]:
     seen: set[str] = set()
     unique: list[str] = []
@@ -182,6 +220,16 @@ def _unique_symbols(symbols: list[str]) -> list[str]:
             seen.add(normalized)
             unique.append(normalized)
     return unique
+
+
+def _normalize_user_symbol(raw_symbol: str) -> tuple[str, str | None]:
+    """Normalize a user-entered Indian equity symbol for Yahoo Finance."""
+    cleaned = raw_symbol.strip().upper()
+    if not cleaned:
+        return "", None
+    if "." not in cleaned:
+        return f"{cleaned}.NS", f"Using `{cleaned}.NS` because no exchange suffix was entered."
+    return cleaned, None
 
 
 def _risk_per_share(signal) -> float | None:
@@ -208,26 +256,632 @@ def _position_size(signal, portfolio_value: float) -> int | None:
 
 st.set_page_config(
     page_title="Indian Stock Research Platform",
-    page_icon="📈",
+    page_icon="chart_with_upwards_trend",
     layout="wide",
+)
+
+st.markdown(
+    """
+    <style>
+    .block-container { padding-top: 1.4rem; padding-bottom: 2rem; }
+    div[data-testid="stMetric"] {
+        background: #ffffff;
+        border: 1px solid #e6e8eb;
+        border-radius: 8px;
+        padding: 0.75rem 0.9rem;
+    }
+    div[data-testid="stExpander"] {
+        border: 1px solid #e6e8eb;
+        border-radius: 8px;
+    }
+    .app-header {
+        border-bottom: 1px solid #e6e8eb;
+        padding-bottom: 0.85rem;
+        margin-bottom: 0.85rem;
+    }
+    .app-title {
+        font-size: 2rem;
+        font-weight: 700;
+        line-height: 1.15;
+        margin: 0;
+    }
+    .app-subtitle {
+        color: #59636e;
+        font-size: 0.95rem;
+        margin-top: 0.25rem;
+    }
+    .phase-pill {
+        display: inline-block;
+        border: 1px solid #d0d7de;
+        border-radius: 999px;
+        padding: 0.25rem 0.65rem;
+        font-size: 0.8rem;
+        color: #24292f;
+        background: #f6f8fa;
+        margin-top: 0.35rem;
+    }
+    .disclaimer {
+        border-left: 4px solid #b7791f;
+        background: #fff8e5;
+        color: #3d3424;
+        border-radius: 6px;
+        padding: 0.65rem 0.8rem;
+        margin-bottom: 1rem;
+        font-size: 0.9rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
 # --------------------------------------------------------------------------- #
 # Disclaimer banner (always visible)
 # --------------------------------------------------------------------------- #
 
-st.warning(
-    "**Disclaimer** — This platform is a personal research aid. It is **not** "
-    "investment advice and **not** a SEBI-registered RA/RIA service. "
-    "Data may contain errors. Past performance is not indicative of future results. "
-    "See `DISCLAIMER.md` in the repository for full terms."
+st.markdown(
+    """
+    <div class="disclaimer">
+      <strong>Disclaimer:</strong> Personal research aid only. Not investment advice,
+      not a SEBI-registered RA/RIA service, and not a guarantee of returns. Verify
+      source data before any decision.
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
-st.title("📈 Indian Stock Research Platform")
-st.caption(
-    "Phase 6 - Local research platform with fundamentals, technicals, flows, "
-    "composite scoring, backtesting, health checks, and alert previews"
+st.markdown(
+    """
+    <div class="app-header">
+      <div class="app-title">Indian Stock Research Platform</div>
+      <div class="app-subtitle">
+        Fundamentals, technicals, flows, scoring, backtesting, alert previews, and universe scanning.
+      </div>
+      <span class="phase-pill">Phase 8 MVP verified</span>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
+
+# --------------------------------------------------------------------------- #
+# Daily Research Brief (Phase 8.5)
+# --------------------------------------------------------------------------- #
+
+brief_universes = list_available_universes()
+if brief_universes:
+    st.subheader("Daily Research Brief")
+    st.caption(
+        "Built from the latest saved universe scan and your local shortlist. "
+        "It does not run fresh network calls; run a universe scan below when you want new data."
+    )
+    brief_col1, brief_col2 = st.columns([2, 1])
+    with brief_col1:
+        brief_universe = st.selectbox(
+            "Brief universe",
+            options=brief_universes,
+            format_func=lambda x: x.replace("_", " ").title(),
+            help="Uses the latest saved scan for this universe.",
+            key="daily_brief_universe",
+        )
+    with brief_col2:
+        brief_min_score = st.slider(
+            "Brief opportunity score",
+            min_value=0,
+            max_value=100,
+            value=60,
+            step=5,
+            help="Minimum score for new opportunities in the daily brief.",
+        )
+
+    daily_brief = build_daily_research_brief(
+        brief_universe,
+        min_opportunity_score=float(brief_min_score),
+    )
+
+    if not daily_brief.has_latest_scan:
+        st.info(
+            "No saved scan exists yet for this universe. Open Top Opportunities below, "
+            "run a small scan, and this brief will populate automatically."
+        )
+    else:
+        brief_metric_cols = st.columns(6)
+        brief_metric_cols[0].metric("Latest run", f"#{daily_brief.latest_run_id}")
+        brief_metric_cols[1].metric("Successful", daily_brief.successful_symbols)
+        brief_metric_cols[2].metric("Failed", daily_brief.failed_symbols)
+        brief_metric_cols[3].metric(
+            "Average score",
+            "N/A" if daily_brief.average_score is None else f"{daily_brief.average_score:.1f}",
+        )
+        brief_metric_cols[4].metric(
+            "Top score",
+            "N/A" if daily_brief.top_score is None else f"{daily_brief.top_score:.1f}",
+        )
+        brief_metric_cols[5].metric(
+            "Action items",
+            len(daily_brief.data_quality_actions) + len(daily_brief.shortlist_actions),
+        )
+
+        if daily_brief.latest_run_at:
+            st.caption(
+                f"Latest saved scan time: `{daily_brief.latest_run_at}`"
+                + (
+                    f" | Compared with scan #{daily_brief.previous_run_id}"
+                    if daily_brief.previous_run_id
+                    else " | No previous scan yet"
+                )
+            )
+
+        brief_tabs = st.tabs(
+            [
+                "New opportunities",
+                "Score movers",
+                "New signals",
+                "Action queue",
+                "Shortlist follow-up",
+            ]
+        )
+
+        with brief_tabs[0]:
+            new_opp_table = daily_brief_table(daily_brief.new_opportunities)
+            if new_opp_table.empty:
+                st.info("No new opportunity rows met the current brief score threshold.")
+            else:
+                st.dataframe(
+                    new_opp_table,
+                    width="stretch",
+                    hide_index=True,
+                    column_config={
+                        "composite_score": st.column_config.NumberColumn("Score", format="%.1f"),
+                        "score_change": st.column_config.NumberColumn(
+                            "Score change", format="%+.1f"
+                        ),
+                        "active_signal_count": st.column_config.NumberColumn(
+                            "Signals", format="%d"
+                        ),
+                    },
+                )
+
+        with brief_tabs[1]:
+            mover_col1, mover_col2 = st.columns(2)
+            with mover_col1:
+                st.markdown("##### Improved")
+                improved_table = daily_brief_table(daily_brief.improved)
+                if improved_table.empty:
+                    st.info("No meaningful score improvers yet.")
+                else:
+                    st.dataframe(improved_table, width="stretch", hide_index=True)
+            with mover_col2:
+                st.markdown("##### Weakened")
+                weakened_table = daily_brief_table(daily_brief.weakened)
+                if weakened_table.empty:
+                    st.info("No meaningful score weakeners yet.")
+                else:
+                    st.dataframe(weakened_table, width="stretch", hide_index=True)
+
+        with brief_tabs[2]:
+            new_signal_table = daily_brief_table(daily_brief.new_signals)
+            if new_signal_table.empty:
+                st.info("No newly active signals versus the previous saved scan.")
+            else:
+                st.dataframe(new_signal_table, width="stretch", hide_index=True)
+
+        with brief_tabs[3]:
+            action_table = daily_brief_table(daily_brief.data_quality_actions, limit=15)
+            if action_table.empty:
+                st.success("No saved-scan data-quality action rows in the latest scan.")
+            else:
+                st.dataframe(action_table, width="stretch", hide_index=True)
+                st.caption(
+                    "These rows need verification before relying on the score: missing data, "
+                    "source warnings, or scan errors."
+                )
+
+        with brief_tabs[4]:
+            shortlist_actions = daily_brief.shortlist_actions
+            if shortlist_actions.empty:
+                st.success("No active shortlist follow-up rows need review.")
+            else:
+                shortlist_columns = [
+                    "symbol",
+                    "review_status",
+                    "tags",
+                    "notes",
+                    "latest_score",
+                    "latest_band",
+                    "latest_active_signals",
+                    "updated_at",
+                ]
+                st.dataframe(
+                    shortlist_actions[
+                        [
+                            column
+                            for column in shortlist_columns
+                            if column in shortlist_actions.columns
+                        ]
+                    ],
+                    width="stretch",
+                    hide_index=True,
+                    column_config={
+                        "latest_score": st.column_config.NumberColumn(
+                            "Latest score", format="%.1f"
+                        ),
+                        "latest_active_signals": st.column_config.NumberColumn(
+                            "Signals", format="%d"
+                        ),
+                    },
+                )
+
+# --------------------------------------------------------------------------- #
+# Top Opportunities scanner (Phase 8)
+# --------------------------------------------------------------------------- #
+
+with st.expander("🔭 Top Opportunities (universe scan)", expanded=False):
+    st.caption(
+        "Run the platform's per-stock pipeline (price → indicators → signals → "
+        "composite score) across an entire index, then rank the results. "
+        "This Phase 8 MVP scanner uses price/technical inputs first; fundamentals "
+        "and flow inputs are still limited during universe-wide scans. "
+        "Scans run sequentially for reliability, so a Nifty 50 scan can take a few minutes. "
+        "Educational research support — not investment advice."
+    )
+
+    universes_available = list_available_universes()
+    if not universes_available:
+        st.warning("No universes configured. Add lists to `config/universes.yaml`.")
+    else:
+        scan_col1, scan_col2, scan_col3, scan_col4 = st.columns([2, 1, 1, 1])
+        with scan_col1:
+            chosen_universe = st.selectbox(
+                "Universe",
+                options=universes_available,
+                format_func=lambda x: x.replace("_", " ").title(),
+                help="Defined in config/universes.yaml.",
+            )
+        with scan_col2:
+            min_score = st.slider("Min composite score", 0, 100, 60, 5)
+        with scan_col3:
+            min_signals = st.slider("Min active signals", 0, 7, 1)
+
+        try:
+            tickers = load_universe(chosen_universe)
+            universe_error = None
+        except (FileNotFoundError, KeyError) as exc:
+            tickers = []
+            universe_error = str(exc)
+
+        with scan_col4:
+            max_symbols = st.number_input(
+                "Max symbols",
+                min_value=1,
+                max_value=max(1, len(tickers)),
+                value=min(25, max(1, len(tickers))),
+                step=5,
+                help="Keeps full-universe scans manageable. Increase gradually.",
+                disabled=not tickers,
+            )
+
+        if universe_error:
+            st.warning(universe_error)
+            if chosen_universe == "all_nse_listed":
+                st.code(
+                    r"powershell -ExecutionPolicy Bypass -File .\scripts\update_nse_universe.ps1",
+                    language="powershell",
+                )
+        else:
+            st.caption(
+                f"`{chosen_universe}` contains {len(tickers):,} symbol(s). "
+                f"This run will scan the first {min(int(max_symbols), len(tickers)):,}."
+            )
+
+        scan_lookback_days = 400
+
+        if st.button("Run universe scan", type="primary", disabled=not tickers):
+            scan_tickers = tickers[: int(max_symbols)]
+            progress = st.progress(0.0, text=f"Scanning 0/{len(scan_tickers)} symbols...")
+
+            def _on_progress(done: int, total: int, sym: str) -> None:
+                progress.progress(done / total, text=f"Scanned {done}/{total}: {sym}")
+
+            with st.spinner(f"Running {chosen_universe} scan…"):
+                scan_results = scan_universe(
+                    scan_tickers,
+                    lookback_days=scan_lookback_days,
+                    max_workers=1,
+                    progress_callback=_on_progress,
+                )
+            progress.empty()
+
+            run_id = save_universe_scan(
+                universe_name=chosen_universe,
+                results=scan_results,
+                lookback_days=scan_lookback_days,
+                min_score_filter=float(min_score),
+                min_signals_filter=int(min_signals),
+                note=f"UI scan capped at {len(scan_tickers)} symbol(s).",
+            )
+
+            results_df = scan_results_to_frame(scan_results)
+            results_df = results_df[results_df["error"].isna()]
+            filtered = results_df[
+                (results_df["composite_score"].fillna(0) >= min_score)
+                & (results_df["active_signal_count"].fillna(0) >= min_signals)
+            ]
+
+            success_count = len(results_df)
+            failed_count = len(scan_results) - success_count
+            st.success(
+                f"Scan #{run_id} saved: {success_count} successful, {failed_count} failed. "
+                f"{len(filtered)} match your filters (score ≥ {min_score}, "
+                f"≥ {min_signals} active signals)."
+            )
+
+            if filtered.empty:
+                st.info(
+                    "No stocks match the filters. Try lowering the composite score "
+                    "or active-signal threshold."
+                )
+            else:
+                display = filtered.copy()
+                display = display[
+                    [
+                        "symbol",
+                        "composite_score",
+                        "band",
+                        "active_signal_count",
+                        "active_signals",
+                        "fundamentals",
+                        "technicals",
+                        "flows",
+                        "last_close",
+                        "rsi_14",
+                        "ma_stack",
+                        "data_quality_warnings",
+                    ]
+                ]
+                st.dataframe(
+                    display,
+                    width="stretch",
+                    hide_index=True,
+                    column_config={
+                        "composite_score": st.column_config.NumberColumn("Score", format="%.1f"),
+                        "active_signal_count": st.column_config.NumberColumn(
+                            "Active signals", format="%d"
+                        ),
+                        "fundamentals": st.column_config.NumberColumn("Fund", format="%.1f"),
+                        "technicals": st.column_config.NumberColumn("Tech", format="%.1f"),
+                        "flows": st.column_config.NumberColumn("Flows", format="%.1f"),
+                        "last_close": st.column_config.NumberColumn("Last close", format="₹%.2f"),
+                        "rsi_14": st.column_config.NumberColumn("RSI 14", format="%.1f"),
+                    },
+                )
+                st.download_button(
+                    "Download scan results CSV",
+                    data=display.to_csv(index=False),
+                    file_name=f"{chosen_universe}_scan.csv",
+                    mime="text/csv",
+                )
+
+        latest_run, previous_run, comparison_frame = compare_latest_universe_scans(chosen_universe)
+        if latest_run is not None:
+            st.markdown("#### Latest saved scan")
+            latest_col1, latest_col2, latest_col3, latest_col4 = st.columns(4)
+            latest_col1.metric("Run ID", latest_run.id)
+            latest_col2.metric("Saved rows", latest_run.requested_symbols)
+            latest_col3.metric("Successful", latest_run.successful_symbols)
+            latest_col4.metric("Failed", latest_run.failed_symbols)
+
+            latest_success = comparison_frame[comparison_frame["error"].isna()].copy()
+            if not latest_success.empty:
+                filter_col1, filter_col2, filter_col3 = st.columns(3)
+                status_options = [
+                    "All",
+                    *sorted(latest_success["comparison_status"].dropna().unique()),
+                ]
+                with filter_col1:
+                    comparison_status_filter = st.selectbox(
+                        "Comparison status",
+                        options=status_options,
+                        help="Focus on improved, weakened, stable, or new symbols.",
+                    )
+                with filter_col2:
+                    min_score_change_filter = st.number_input(
+                        "Min score change",
+                        value=-100.0,
+                        min_value=-100.0,
+                        max_value=100.0,
+                        step=1.0,
+                        help="Use 0 to show flat/improving rows; use 5 for meaningful improvement.",
+                    )
+                with filter_col3:
+                    new_signals_only = st.checkbox(
+                        "New signals only",
+                        value=False,
+                        help="Show only stocks with at least one newly active signal.",
+                    )
+
+                if comparison_status_filter != "All":
+                    latest_success = latest_success[
+                        latest_success["comparison_status"] == comparison_status_filter
+                    ]
+                latest_success = latest_success[
+                    latest_success["score_change"].isna()
+                    | (latest_success["score_change"] >= float(min_score_change_filter))
+                ]
+                if new_signals_only:
+                    latest_success = latest_success[
+                        latest_success["new_active_signals"].fillna("").astype(str).str.strip()
+                        != ""
+                    ]
+
+            latest_display = latest_success.head(25)
+            if latest_display.empty:
+                st.info("The latest saved scan has no successful stock rows to display.")
+            else:
+                if previous_run is None:
+                    st.caption("No previous saved scan exists yet for comparison.")
+                else:
+                    st.caption(
+                        f"Compared against saved scan #{previous_run.id}. "
+                        "Positive score change means the latest scan improved."
+                    )
+                st.dataframe(
+                    latest_display[
+                        [
+                            "symbol",
+                            "composite_score",
+                            "previous_score",
+                            "score_change",
+                            "comparison_status",
+                            "band",
+                            "active_signal_count",
+                            "signal_count_change",
+                            "new_active_signals",
+                            "active_signals",
+                            "last_close",
+                            "rsi_14",
+                            "ma_stack",
+                            "data_quality_warnings",
+                        ]
+                    ],
+                    width="stretch",
+                    hide_index=True,
+                    column_config={
+                        "composite_score": st.column_config.NumberColumn("Score", format="%.1f"),
+                        "previous_score": st.column_config.NumberColumn(
+                            "Previous score", format="%.1f"
+                        ),
+                        "score_change": st.column_config.NumberColumn("Score Δ", format="%+.1f"),
+                        "active_signal_count": st.column_config.NumberColumn(
+                            "Active signals", format="%d"
+                        ),
+                        "signal_count_change": st.column_config.NumberColumn(
+                            "Signal Δ", format="%+.0f"
+                        ),
+                        "last_close": st.column_config.NumberColumn("Last close", format="₹%.2f"),
+                        "rsi_14": st.column_config.NumberColumn("RSI 14", format="%.1f"),
+                    },
+                )
+
+                shortlist_options = list(latest_success["symbol"].head(50))
+                symbols_to_shortlist = st.multiselect(
+                    "Add symbols from latest saved scan to research shortlist",
+                    options=shortlist_options,
+                    help="This only saves symbols for follow-up research. It is not a trade list.",
+                )
+                if st.button("Add selected to shortlist", disabled=not symbols_to_shortlist):
+                    added_count = add_symbols_to_watchlist(
+                        symbols_to_shortlist,
+                        source_universe=chosen_universe,
+                        source_run_id=int(latest_run.id),
+                        reason="Selected from Phase 8 scanner comparison.",
+                    )
+                    st.success(f"Saved {added_count} symbol(s) to the local research shortlist.")
+
+                st.download_button(
+                    "Download latest saved scan CSV",
+                    data=comparison_frame.to_csv(index=False),
+                    file_name=f"{chosen_universe}_latest_saved_scan.csv",
+                    mime="text/csv",
+                )
+
+        st.markdown("#### Local research shortlist")
+        show_inactive_shortlist = st.checkbox(
+            "Show inactive shortlist rows",
+            value=False,
+            help="Inactive rows stay saved for audit/history but are hidden by default.",
+        )
+        shortlist_frame = watchlist_to_frame(
+            fetch_watchlist_items(active_only=not show_inactive_shortlist)
+        )
+        if shortlist_frame.empty:
+            st.info("No shortlisted stocks yet. Add symbols from a saved scan above.")
+        else:
+            shortlist_frame = enrich_watchlist_with_latest_scores(shortlist_frame)
+            shortlist_display = shortlist_frame[
+                [
+                    "symbol",
+                    "review_status",
+                    "tags",
+                    "notes",
+                    "active",
+                    "latest_score",
+                    "latest_band",
+                    "latest_active_signals",
+                    "latest_close",
+                    "latest_run_id",
+                    "source_universe",
+                    "reason",
+                    "updated_at",
+                ]
+            ].copy()
+            edited_shortlist = st.data_editor(
+                shortlist_display,
+                width="stretch",
+                hide_index=True,
+                column_config={
+                    "symbol": st.column_config.TextColumn("Symbol"),
+                    "review_status": st.column_config.SelectboxColumn(
+                        "Review status",
+                        options=["watch", "deep_dive", "avoid", "done"],
+                        help="Simple research workflow status.",
+                    ),
+                    "tags": st.column_config.TextColumn(
+                        "Tags",
+                        help="Comma-separated labels such as bank, earnings, breakout, avoid.",
+                    ),
+                    "notes": st.column_config.TextColumn(
+                        "Notes",
+                        width="large",
+                        help="Your local research notes. Keep them factual and non-advisory.",
+                    ),
+                    "active": st.column_config.CheckboxColumn(
+                        "Active",
+                        help="Untick to hide this row from the default shortlist view.",
+                    ),
+                    "latest_score": st.column_config.NumberColumn(
+                        "Latest score",
+                        format="%.1f",
+                    ),
+                    "latest_active_signals": st.column_config.NumberColumn(
+                        "Signals",
+                        format="%d",
+                    ),
+                    "latest_close": st.column_config.NumberColumn(
+                        "Last close",
+                        format="₹%.2f",
+                    ),
+                    "latest_run_id": st.column_config.NumberColumn(
+                        "Scan run",
+                        format="%d",
+                    ),
+                },
+                disabled=[
+                    "symbol",
+                    "latest_score",
+                    "latest_active_signals",
+                    "latest_close",
+                    "latest_run_id",
+                    "latest_band",
+                    "source_universe",
+                    "reason",
+                    "updated_at",
+                ],
+                key=f"shortlist_editor_{chosen_universe}_{show_inactive_shortlist}",
+            )
+            save_col, export_col = st.columns([1, 2])
+            with save_col:
+                if st.button("Save shortlist review edits"):
+                    updated_count = update_watchlist_reviews(
+                        edited_shortlist.to_dict(orient="records")
+                    )
+                    st.success(f"Saved review edits for {updated_count} shortlist row(s).")
+                    st.rerun()
+            with export_col:
+                st.download_button(
+                    "Download shortlist CSV",
+                    data=edited_shortlist.to_csv(index=False),
+                    file_name="research_shortlist.csv",
+                    mime="text/csv",
+                )
 
 # --------------------------------------------------------------------------- #
 # Sidebar: inputs
@@ -245,9 +899,19 @@ with st.sidebar:
         index=0,
         help="Yahoo Finance symbol. `.NS` for NSE, `.BO` for BSE.",
     )
-    custom = st.text_input("Or enter a custom ticker", value="", placeholder="e.g. TATAMOTORS.NS")
+    custom = st.text_input(
+        "Or enter a custom ticker",
+        value="",
+        placeholder="e.g. HDFCBANK or INFY.NS",
+        help=(
+            "For NSE stocks, you can type either HDFCBANK or HDFCBANK.NS. "
+            "The app will try the .NS suffix automatically when no suffix is provided."
+        ),
+    )
     if custom.strip():
-        symbol = custom.strip().upper()
+        symbol, symbol_note = _normalize_user_symbol(custom)
+        if symbol_note:
+            st.caption(symbol_note)
 
     today = date.today()
     default_start = today - timedelta(days=5 * 365)
@@ -284,9 +948,13 @@ with st.spinner(f"Downloading {symbol}…"):
         st.stop()
 
 if df.empty:
-    st.error(
-        f"No data returned for **{symbol}**. "
-        "Check that the ticker is valid and that the date range contains trading days."
+    st.error(f"No price data was returned for **{symbol}**.")
+    st.info(
+        "What this usually means: the symbol is typed incorrectly, the exchange suffix is wrong, "
+        "the company symbol has changed, the stock is inactive/delisted, the selected date range "
+        "has no trading days, or yfinance is temporarily missing the data. Try a known live symbol "
+        "such as RELIANCE.NS or HDFCBANK.NS, then update the local universe list if this symbol "
+        "is stale."
     )
     st.stop()
 
@@ -365,6 +1033,12 @@ _fundamentals_source_label = "yfinance (live)" if _yf_available else "local CSV 
 
 summary_symbols = _unique_symbols([*starter, symbol])
 summary_frame = build_fundamentals_summary(fundamentals_provider, summary_symbols)
+fundamentals_frame = pd.DataFrame()
+fundamentals_quality_errors: list[str] = []
+fundamentals_quality_warnings: list[str] = []
+banking_trust_frame = pd.DataFrame()
+banking_quality_errors: list[str] = []
+banking_quality_warnings: list[str] = []
 
 overview_tab, selected_tab, sector_ranks_tab = st.tabs(
     ["Overview", "Selected stock", "Sector rankings"]
@@ -428,8 +1102,10 @@ with selected_tab:
             symbol=symbol,
             raise_on_error=False,
         )
+        fundamentals_quality_errors = list(fundamentals_report.errors)
+        fundamentals_quality_warnings = list(fundamentals_report.warnings)
         if fundamentals_report.errors:
-            st.error("Fundamentals data quality errors:")
+            st.warning("Fundamentals data quality gaps:")
             for error in fundamentals_report.errors:
                 st.markdown(f"- {error}")
         if fundamentals_report.warnings:
@@ -440,8 +1116,25 @@ with selected_tab:
         snapshots = fundamentals_provider.get_snapshots(symbol)
         latest_fundamentals = snapshots[-1]
         previous_fundamentals = snapshots[-2] if len(snapshots) > 1 else None
+        selected_sector = (
+            fundamentals_frame["sector"].dropna().iloc[-1]
+            if "sector" in fundamentals_frame.columns
+            and not fundamentals_frame["sector"].dropna().empty
+            else None
+        )
+        selected_industry = (
+            fundamentals_frame["industry"].dropna().iloc[-1]
+            if "industry" in fundamentals_frame.columns
+            and not fundamentals_frame["industry"].dropna().empty
+            else None
+        )
+        financial_sector = is_financial_sector(
+            symbol=symbol,
+            sector=selected_sector,
+            industry=selected_industry,
+        )
         ratios = calculate_basic_ratios(latest_fundamentals)
-        altman = calculate_altman_z_score(latest_fundamentals)
+        altman = None if financial_sector else calculate_altman_z_score(latest_fundamentals)
         piotroski = (
             calculate_piotroski_f_score(latest_fundamentals, previous_fundamentals)
             if previous_fundamentals
@@ -464,13 +1157,24 @@ with selected_tab:
         f1.metric("Fiscal year", str(latest_fundamentals.fiscal_year))
         f2.metric("Revenue growth", _format_pct(growth.get("revenue_growth")))
         f3.metric("Piotroski F-Score", _format_score(piotroski.score if piotroski else None, 9))
-        f4.metric("Altman Z-Score", _format_number(altman.score))
+        f4.metric(
+            "Altman Z-Score",
+            "N/A for financials" if financial_sector else _format_number(altman.score),
+        )
 
         r1, r2, r3, r4 = st.columns(4)
         r1.metric("ROA", _format_pct(ratios["return_on_assets"]))
         r2.metric("ROE", _format_pct(ratios["return_on_equity"]))
-        r3.metric("Debt / Equity", _format_number(ratios["debt_to_equity"]))
+        r3.metric(
+            "Debt / Equity",
+            "N/A for financials" if financial_sector else _format_number(ratios["debt_to_equity"]),
+        )
         r4.metric("Source", source)
+        if financial_sector:
+            st.info(
+                "Financial-sector rules applied: Altman Z-Score, cash-conversion cycle, "
+                "working-capital trend, and industrial debt/equity checks are not used for this stock."
+            )
 
         # Multi-year CAGR (master prompt §4.1)
         st.markdown("##### Multi-year CAGR")
@@ -500,38 +1204,163 @@ with selected_tab:
             "available, or when the start value is zero/negative."
         )
 
-        # Extended balance-sheet health (master prompt §4.1)
-        st.markdown("##### Balance-sheet health (extended)")
-        ext = compute_extended_health(snapshots)
-        e1, e2, e3, e4 = st.columns(4)
-        e1.metric(
-            "Interest coverage",
-            f"{ext['interest_coverage']:.1f}×" if ext["interest_coverage"] is not None else "N/A",
-            help="EBIT / |Interest expense|. >5× is healthy; <1.5× is a red flag.",
-        )
-        e2.metric(
-            "Cash conv. cycle",
-            f"{ext['ccc_days']:.0f} d" if ext["ccc_days"] is not None else "N/A",
-            help="DSO + DIO − DPO (days). Lower is better; negative is excellent.",
-        )
-        e3.metric(
-            "Working capital",
-            f"₹{ext['working_capital_latest']:,.0f}"
-            if ext["working_capital_latest"] is not None
-            else "N/A",
-        )
-        e4.metric(
-            "WC YoY change",
-            _format_pct(ext["working_capital_yoy_change"]),
-            help="Change in working capital vs. prior fiscal year.",
-        )
+        if financial_sector:
+            st.markdown("##### Bank / financial fundamentals")
+            b1, b2, b3 = st.columns(3)
+            b1.metric("ROA", _format_pct(ratios["return_on_assets"]))
+            b2.metric("ROE", _format_pct(ratios["return_on_equity"]))
+            b3.metric("Net income growth", _format_pct(growth.get("net_income_growth")))
 
-        if ext["dso_days"] is not None:
-            st.caption(
-                f"DSO: {ext['dso_days']:.0f}d  |  "
-                f"DIO: {ext['dio_days']:.0f}d  |  "
-                f"DPO: {ext['dpo_days']:.0f}d"
+            banking_frame = _load_banking_fundamentals(symbol)
+            banking_trust_frame = banking_frame
+            banking_template_path = "data/sample/banking_fundamentals_template.csv"
+            if banking_frame.empty:
+                st.info(
+                    "No manual banking metrics found yet. Add audited rows to "
+                    f"`{banking_template_path}` to show NIM, GNPA, NNPA, CASA, "
+                    "credit/deposit growth, and capital adequacy here."
+                )
+                with st.expander("Banking metrics data-entry helper", expanded=False):
+                    st.caption(
+                        "Use audited annual reports, investor presentations, or exchange filings. "
+                        "Leave unknown fields blank; the validator will warn instead of guessing."
+                    )
+                    st.dataframe(
+                        [
+                            {"Field": "nim_pct", "Meaning": "Net Interest Margin %"},
+                            {"Field": "gnpa_pct", "Meaning": "Gross NPA %"},
+                            {"Field": "nnpa_pct", "Meaning": "Net NPA %"},
+                            {"Field": "casa_pct", "Meaning": "CASA ratio %"},
+                            {"Field": "credit_growth_pct", "Meaning": "Loan/advances growth %"},
+                            {"Field": "deposit_growth_pct", "Meaning": "Deposit growth %"},
+                            {
+                                "Field": "capital_adequacy_pct",
+                                "Meaning": "Capital adequacy / CRAR %",
+                            },
+                        ],
+                        hide_index=True,
+                        width="stretch",
+                    )
+                    st.code(
+                        "symbol,fiscal_year,nim_pct,gnpa_pct,nnpa_pct,casa_pct,"
+                        "credit_growth_pct,deposit_growth_pct,capital_adequacy_pct,"
+                        "source,source_url,last_updated\n"
+                        f"{symbol},2025,,,,,,,,annual_report_2025,PASTE_SOURCE_URL_HERE,"
+                        "2026-04-28",
+                        language="csv",
+                    )
+                    st.caption("Detailed guide: `docs/banking_fundamentals_entry_guide.md`.")
+            else:
+                banking_report = validate_banking_fundamentals(
+                    banking_frame,
+                    symbol=symbol,
+                    raise_on_error=False,
+                )
+                banking_quality_errors = list(banking_report.errors)
+                banking_quality_warnings = list(banking_report.warnings)
+                if banking_report.errors:
+                    st.warning("Banking metrics data quality gaps:")
+                    for error in banking_report.errors:
+                        st.markdown(f"- {error}")
+                if banking_report.warnings:
+                    st.warning("Banking metrics data quality warnings:")
+                    for warning in banking_report.warnings:
+                        st.markdown(f"- {warning}")
+
+                latest_bank = banking_frame.iloc[-1]
+                bm1, bm2, bm3, bm4 = st.columns(4)
+                bm1.metric("NIM", _format_pct_points(latest_bank.get("nim_pct")))
+                bm2.metric("GNPA", _format_pct_points(latest_bank.get("gnpa_pct")))
+                bm3.metric("NNPA", _format_pct_points(latest_bank.get("nnpa_pct")))
+                bm4.metric("CASA", _format_pct_points(latest_bank.get("casa_pct")))
+                bm5, bm6, bm7, bm8 = st.columns(4)
+                bm5.metric(
+                    "Credit growth",
+                    _format_pct_points(latest_bank.get("credit_growth_pct")),
+                )
+                bm6.metric(
+                    "Deposit growth",
+                    _format_pct_points(latest_bank.get("deposit_growth_pct")),
+                )
+                bm7.metric(
+                    "Capital adequacy",
+                    _format_pct_points(latest_bank.get("capital_adequacy_pct")),
+                )
+                bm8.metric("Fiscal year", str(latest_bank.get("fiscal_year")))
+                st.caption(
+                    "Source: "
+                    f"{latest_bank.get('source') or 'manual CSV'} | "
+                    f"Last updated: {latest_bank.get('last_updated') or 'N/A'}"
+                )
+                st.dataframe(
+                    banking_frame[
+                        [
+                            "fiscal_year",
+                            "nim_pct",
+                            "gnpa_pct",
+                            "nnpa_pct",
+                            "casa_pct",
+                            "credit_growth_pct",
+                            "deposit_growth_pct",
+                            "capital_adequacy_pct",
+                            "source",
+                            "source_url",
+                            "last_updated",
+                        ]
+                    ],
+                    hide_index=True,
+                    width="stretch",
+                    column_config={
+                        "nim_pct": st.column_config.NumberColumn("NIM %", format="%.2f"),
+                        "gnpa_pct": st.column_config.NumberColumn("GNPA %", format="%.2f"),
+                        "nnpa_pct": st.column_config.NumberColumn("NNPA %", format="%.2f"),
+                        "casa_pct": st.column_config.NumberColumn("CASA %", format="%.2f"),
+                        "credit_growth_pct": st.column_config.NumberColumn(
+                            "Credit growth %", format="%.2f"
+                        ),
+                        "deposit_growth_pct": st.column_config.NumberColumn(
+                            "Deposit growth %", format="%.2f"
+                        ),
+                        "capital_adequacy_pct": st.column_config.NumberColumn(
+                            "Capital adequacy %", format="%.2f"
+                        ),
+                    },
+                )
+        else:
+            # Extended balance-sheet health (master prompt §4.1)
+            st.markdown("##### Balance-sheet health (extended)")
+            ext = compute_extended_health(snapshots)
+            e1, e2, e3, e4 = st.columns(4)
+            e1.metric(
+                "Interest coverage",
+                f"{ext['interest_coverage']:.1f}×"
+                if ext["interest_coverage"] is not None
+                else "N/A",
+                help="EBIT / |Interest expense|. >5× is healthy; <1.5× is a red flag.",
             )
+            e2.metric(
+                "Cash conv. cycle",
+                f"{ext['ccc_days']:.0f} d" if ext["ccc_days"] is not None else "N/A",
+                help="DSO + DIO − DPO (days). Lower is better; negative is excellent.",
+            )
+            e3.metric(
+                "Working capital",
+                f"₹{ext['working_capital_latest']:,.0f}"
+                if ext["working_capital_latest"] is not None
+                else "N/A",
+            )
+            e4.metric(
+                "WC YoY change",
+                _format_pct(ext["working_capital_yoy_change"]),
+                help="Change in working capital vs. prior fiscal year.",
+            )
+
+            if any(ext.get(key) is not None for key in ("dso_days", "dio_days", "dpo_days")):
+                st.caption(
+                    f"DSO: {_format_days(ext['dso_days'])}  |  "
+                    f"DIO: {_format_days(ext['dio_days'])}  |  "
+                    f"DPO: {_format_days(ext['dpo_days'])}"
+                )
 
         trend_fig = go.Figure()
         trend_fig.add_trace(
@@ -644,6 +1473,10 @@ if not summary_frame.empty and "symbol" in summary_frame.columns:
         selected_summary = symbol_matches.iloc[0].to_dict()
 
 with st.spinner("Building composite score..."):
+    score_banking_frame = _load_banking_fundamentals(symbol)
+    score_banking_row = (
+        score_banking_frame.iloc[-1].to_dict() if not score_banking_frame.empty else None
+    )
     score_delivery = _load_delivery(symbol)
     score_delivery_stats = delivery_stats(score_delivery) if not score_delivery.empty else None
     score_earnings = _load_earnings_hist(symbol)
@@ -656,6 +1489,7 @@ with st.spinner("Building composite score..."):
     composite = score_stock(
         symbol=symbol,
         fundamentals=selected_summary,
+        banking_fundamentals=score_banking_row,
         technicals=latest_technical,
         signals=technical_signals,
         delivery=score_delivery_stats,
@@ -669,6 +1503,56 @@ score_cols[2].metric("Fundamentals", f"{composite.sub_scores['fundamentals']:.1f
 score_cols[3].metric("Technicals", f"{composite.sub_scores['technicals']:.1f}")
 score_cols[4].metric("Flows", f"{composite.sub_scores['flows']:.1f}")
 score_cols[5].metric("Events", f"{composite.sub_scores['events_quality']:.1f}")
+
+trust_rows = build_data_trust_rows(
+    symbol=symbol,
+    price_frame=df,
+    price_source=settings.provider_price,
+    price_warnings=report.warnings,
+    price_errors=report.errors,
+    fundamentals_frame=fundamentals_frame,
+    fundamentals_source=_fundamentals_source_label,
+    fundamentals_warnings=fundamentals_quality_warnings,
+    fundamentals_errors=fundamentals_quality_errors,
+    banking_frame=banking_trust_frame,
+    banking_applicable=is_financial_sector(row=selected_summary) if selected_summary else False,
+    banking_warnings=banking_quality_warnings,
+    banking_errors=banking_quality_errors,
+    composite_missing=composite.missing_data,
+    composite_risks=composite.risks,
+    active_signal_count=sum(1 for signal in technical_signals if signal.active),
+    delivery_available=score_delivery_stats is not None,
+    result_volatility_available=score_result_volatility is not None,
+)
+trust_level, trust_reason = data_trust_level(trust_rows)
+trust_col_1, trust_col_2, trust_col_3 = st.columns([1, 2, 1])
+trust_col_1.metric("Data trust", trust_level)
+trust_col_2.info(trust_reason)
+trust_col_3.metric(
+    "Action items",
+    sum(1 for row in trust_rows if row["status"] == "ACTION"),
+)
+
+with st.expander("Data Trust: source freshness, missing inputs, and score reliability"):
+    st.dataframe(
+        data_trust_rows_to_frame(trust_rows),
+        width="stretch",
+        hide_index=True,
+        column_config={
+            "status": st.column_config.TextColumn(
+                "Status",
+                help="OK means usable, PARTIAL means usable with caveats, ACTION means fix or verify.",
+            ),
+            "what_to_check": st.column_config.TextColumn(
+                "What to check",
+                width="large",
+            ),
+        },
+    )
+    st.caption(
+        "Use this panel before trusting any score. It shows whether the current output is backed "
+        "by loaded source data, partial fallback logic, or manual data that still needs verification."
+    )
 
 score_detail_tab, score_risk_tab, score_config_tab = st.tabs(
     ["Why this score", "Risks / missing data", "Score inputs"]

@@ -21,15 +21,16 @@ See [`MASTER_PROMPT.md`](./MASTER_PROMPT.md) for the full vision and phased buil
 
 ---
 
-## Current phase: Phase 6 - Polish, Alerts, and Compliance Hardening
+## Current phase: Phase 8 - Universe Opportunity Scanner
 
-Phases 0, 1, 2, 3, 4, and 5 are complete for the local MVP foundation. Phase 6 now adds daily-use readiness: local health checks, backup helpers, alert previews, and clearer compliance/deployment gates.
+Phases 0 through 7 are complete for the local MVP foundation. Phase 8 adds a universe-wide scanner that can rank configured watchlists by the existing technical signal and composite-score pipeline.
 
-The current fundamentals provider is `local_csv`. It reads sample/template data from `data/sample/fundamentals_annual_sample.csv` so the pipeline can be tested without scraping a website.
+The current fundamentals flow tries yfinance first, then falls back to the local CSV sample/template data from `data/sample/fundamentals_annual_sample.csv` when live data is incomplete or unavailable.
 
 See [`PROJECT_STATE.md`](./PROJECT_STATE.md) for current status and
 [`docs/master_prompt_audit.md`](./docs/master_prompt_audit.md) for the phase-by-phase audit
-against the original master prompt.
+against the original master prompt. See
+[`docs/phase_0_8_refinement.md`](./docs/phase_0_8_refinement.md) for the latest Phase 0-8 refinement pass.
 
 ---
 
@@ -43,6 +44,7 @@ indian-stock-research-platform/
 │   ├── alerts/                 # Alert preview rules; no messages sent yet
 │   ├── data/                   # Providers, validators, cache
 │   ├── analytics/              # Fundamentals, technicals, signals
+│   │   └── scanner/            # Universe scanner and top-opportunity ranking
 │   ├── scoring/                # Composite scoring engine
 │   ├── db/                     # DB models and migrations
 │   ├── ops/                    # Local health checks and operations helpers
@@ -105,6 +107,32 @@ Edit `.env` later as needed. Phase 0 does not require any API keys.
 
 ### 6. Run the Streamlit app
 
+**Easiest Windows option:**
+
+Double-click:
+
+```text
+start_app.cmd
+```
+
+Or run this from PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run_app.ps1
+```
+
+This starts Streamlit on `http://localhost:8501`, opens the browser, and writes live
+startup logs to:
+
+```text
+logs/streamlit_live_stdout.log
+logs/streamlit_live_stderr.log
+```
+
+If the app ever shows "connection refused", run `start_app.cmd` again.
+
+**Manual option:**
+
 ```bash
 streamlit run src/stock_platform/ui/streamlit_app.py
 ```
@@ -128,6 +156,14 @@ The Signals table also shows educational trigger price, entry zone, stop-loss, t
 The Signal backtest tab now shows per-signal returns, portfolio diagnostics, walk-forward validation where enough history exists, individual trades, and CSV downloads. Results are educational and only as good as the available saved signal history.
 
 The Operations & Alerts section shows local setup health checks, data provenance, and alert previews. No Telegram or email alerts are sent in this MVP; the preview confirms wording and compliance boundaries first.
+
+The Top Opportunities scanner runs a configured universe such as `nifty_50` or `nifty_next_50` through the price, indicator, signal, and composite-score path. Each scan is saved to local SQLite at `data/stock_platform.db` in `universe_scan_runs` and `universe_scan_results`, so the latest scan remains visible after you close and reopen Streamlit. The latest saved scan is compared with the previous saved scan for the same universe, and selected symbols can be added to a local research shortlist in `research_watchlist_items`. This Phase 8 scanner is still a research helper: universe-wide fundamentals and flows are limited, and configured index lists are seed watchlists rather than legally verified current constituents.
+
+The `all_nse_listed` universe reads a local NSE equity-list CSV from `data/universe/nse_equity_list.csv`. Refresh it with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\update_nse_universe.ps1
+```
 
 ### 7. Run a local health check
 

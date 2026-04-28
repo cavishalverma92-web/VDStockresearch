@@ -268,3 +268,95 @@ class SignalAudit(Base):
         onupdate=utc_now,
     )
     scan_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+
+class UniverseScanRun(Base):
+    """One saved Phase 8 universe scanner run."""
+
+    __tablename__ = "universe_scan_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    universe_name: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
+    requested_symbols: Mapped[int] = mapped_column(Integer, nullable=False)
+    successful_symbols: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_symbols: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    lookback_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    min_score_filter: Mapped[float | None] = mapped_column(Float)
+    min_signals_filter: Mapped[int | None] = mapped_column(Integer)
+    source: Mapped[str] = mapped_column(String(80), nullable=False, default="yfinance")
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    results: Mapped[list[UniverseScanResult]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+    )
+
+
+class UniverseScanResult(Base):
+    """One symbol result from a saved universe scanner run."""
+
+    __tablename__ = "universe_scan_results"
+    __table_args__ = (UniqueConstraint("run_id", "symbol", name="uq_universe_scan_result_symbol"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey("universe_scan_runs.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    symbol: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    composite_score: Mapped[float | None] = mapped_column(Float)
+    band: Mapped[str | None] = mapped_column(String(40))
+    fundamentals_score: Mapped[float | None] = mapped_column(Float)
+    technicals_score: Mapped[float | None] = mapped_column(Float)
+    flows_score: Mapped[float | None] = mapped_column(Float)
+    events_quality_score: Mapped[float | None] = mapped_column(Float)
+    macro_sector_score: Mapped[float | None] = mapped_column(Float)
+    active_signal_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    active_signals_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    last_close: Mapped[float | None] = mapped_column(Float)
+    rsi_14: Mapped[float | None] = mapped_column(Float)
+    ma_stack: Mapped[str | None] = mapped_column(String(40))
+    data_quality_warnings_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    run: Mapped[UniverseScanRun] = relationship(back_populates="results")
+
+
+class ResearchWatchlistItem(Base):
+    """One symbol saved by the user for follow-up research."""
+
+    __tablename__ = "research_watchlist_items"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "watchlist_name",
+            "symbol",
+            name="uq_research_watchlist_item",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(80), nullable=False, default="local")
+    watchlist_name: Mapped[str] = mapped_column(
+        String(120),
+        index=True,
+        nullable=False,
+        default="research_shortlist",
+    )
+    symbol: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    source_universe: Mapped[str | None] = mapped_column(String(120))
+    source_run_id: Mapped[int | None] = mapped_column(ForeignKey("universe_scan_runs.id"))
+    reason: Mapped[str | None] = mapped_column(Text)
+    review_status: Mapped[str] = mapped_column(String(40), nullable=False, default="watch")
+    tags: Mapped[str] = mapped_column(String(240), nullable=False, default="")
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+    )

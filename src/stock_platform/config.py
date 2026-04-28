@@ -125,3 +125,9 @@ def get_data_sources_config() -> dict[str, Any]:
 def get_thresholds_config() -> dict[str, Any]:
     """Return the thresholds config."""
     return _load_yaml("thresholds.yaml")
+
+
+@lru_cache(maxsize=1)
+def get_universes_config() -> dict[str, Any]:
+    """Return the index-universe lists for the Phase 8 scanner."""
+    return _load_yaml("universes.yaml")

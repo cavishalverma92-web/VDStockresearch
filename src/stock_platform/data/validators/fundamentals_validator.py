@@ -6,30 +6,14 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 
+from stock_platform.analytics.fundamentals.sector_policy import (
+    fundamentals_required_columns_for,
+    fundamentals_score_inputs_for,
+    is_financial_sector,
+)
 from stock_platform.utils.logging import get_dq_logger
 
 log = get_dq_logger(__name__)
-
-# Columns that must be present for financial calculations and quality scores.
-# Metadata columns (sector, industry, market_cap_bucket) are optional and
-# intentionally excluded here — they enrich rankings but do not block validation.
-_REQUIRED_COLUMNS = [
-    "symbol",
-    "fiscal_year",
-    "revenue",
-    "gross_profit",
-    "ebit",
-    "net_income",
-    "operating_cash_flow",
-    "total_assets",
-    "total_liabilities",
-    "current_assets",
-    "current_liabilities",
-    "retained_earnings",
-    "shares_outstanding",
-    "market_cap",
-    "source",
-]
 
 
 class FundamentalsValidationError(Exception):
@@ -61,7 +45,16 @@ def validate_annual_fundamentals(
         report.warnings.append("fundamentals_empty")
         return _finalize(report, raise_on_error)
 
-    missing_columns = set(_REQUIRED_COLUMNS) - set(frame.columns)
+    sector = _first_available(frame, "sector")
+    industry = _first_available(frame, "industry")
+    financial_sector = is_financial_sector(symbol=symbol, sector=sector, industry=industry)
+    required_columns = fundamentals_required_columns_for(
+        symbol=symbol,
+        sector=sector,
+        industry=industry,
+    )
+
+    missing_columns = set(required_columns) - set(frame.columns)
     if missing_columns:
         report.errors.append(f"missing_columns: {sorted(missing_columns)}")
         return _finalize(report, raise_on_error)
@@ -71,29 +64,11 @@ def validate_annual_fundamentals(
     if frame["fiscal_year"].duplicated().any():
         report.errors.append("duplicate_fiscal_year")
 
-    required_for_scores = {
-        "revenue",
-        "gross_profit",
-        "ebitda",
-        "ebit",
-        "net_income",
-        "eps",
-        "book_value",
-        "operating_cash_flow",
-        "capital_expenditure",
-        "free_cash_flow",
-        "debt",
-        "net_debt",
-        "cash_and_equivalents",
-        "total_assets",
-        "total_liabilities",
-        "current_assets",
-        "current_liabilities",
-        "retained_earnings",
-        "shares_outstanding",
-        "market_cap",
-        "enterprise_value",
-    }
+    required_for_scores = fundamentals_score_inputs_for(
+        symbol=symbol,
+        sector=sector,
+        industry=industry,
+    )
     missing_score_inputs = sorted(
         column
         for column in required_for_scores
@@ -101,6 +76,8 @@ def validate_annual_fundamentals(
     )
     if missing_score_inputs:
         report.warnings.append(f"missing_score_inputs: {missing_score_inputs}")
+    if financial_sector:
+        report.warnings.append("financial_sector_rules_applied")
 
     numeric_columns = required_for_scores | {"fiscal_year"}
     for column in numeric_columns:
@@ -111,6 +88,8 @@ def validate_annual_fundamentals(
             report.errors.append(f"non_numeric_{column}")
 
     for column in ("revenue", "total_assets", "shares_outstanding"):
+        if column not in frame.columns:
+            continue
         values = pd.to_numeric(frame[column], errors="coerce")
         if (values.dropna() <= 0).any():
             report.errors.append(f"non_positive_{column}")
@@ -122,6 +101,13 @@ def validate_annual_fundamentals(
         report.warnings.append("sample_data_source")
 
     return _finalize(report, raise_on_error)
+
+
+def _first_available(frame: pd.DataFrame, column: str) -> object:
+    if column not in frame.columns or frame.empty:
+        return None
+    values = frame[column].dropna()
+    return None if values.empty else values.iloc[-1]
 
 
 def _finalize(

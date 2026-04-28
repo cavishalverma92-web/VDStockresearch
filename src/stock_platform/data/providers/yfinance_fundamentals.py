@@ -172,7 +172,7 @@ class YFinanceFundamentalsProvider(FundamentalsDataProvider):
             ticker = yf.Ticker(symbol)
             rows = self._build_annual_rows(ticker, symbol)
             if not rows:
-                log.warning("yfinance returned no usable fundamentals rows for %s", symbol)
+                log.warning("yfinance returned no usable fundamentals rows for {}", symbol)
                 return pd.DataFrame(columns=_ANNUAL_COLUMNS)
 
             frame = pd.DataFrame(rows)
@@ -189,7 +189,7 @@ class YFinanceFundamentalsProvider(FundamentalsDataProvider):
             return frame.sort_values("fiscal_year").reset_index(drop=True)
 
         except Exception as exc:
-            log.warning("yfinance fundamentals failed for %s: %s", symbol, exc)
+            log.warning("yfinance fundamentals failed for {}: {}", symbol, exc)
             return pd.DataFrame(columns=_ANNUAL_COLUMNS)
 
     def get_all_annual_fundamentals(self) -> pd.DataFrame:
@@ -285,7 +285,7 @@ class YFinanceFundamentalsProvider(FundamentalsDataProvider):
 
             rows.append(row)
 
-        log.info("yfinance fundamentals: %d annual rows for %s", len(rows), symbol)
+        log.info("yfinance fundamentals: {} annual rows for {}", len(rows), symbol)
         return rows
 
 

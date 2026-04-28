@@ -49,9 +49,12 @@ backups/
 data/raw/*
 data/processed/*
 data/cache/*
+data/universe/*.csv
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/cache/.gitkeep
+!data/universe/.gitkeep
+!data/universe/README.md
 *.parquet
 *.feather
 *.pkl
@@ -67,6 +70,7 @@ data/cache/*
 # ---- Logs ----
 logs/*.log
 logs/*.log.*
+logs/*.pid
 !logs/.gitkeep
 
 # ---- VS Code (keep shared settings, ignore user-specific) ----

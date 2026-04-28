@@ -6,7 +6,7 @@
 
 ## Current phase
 
-**Phase 7 - Real Fundamentals Data** *(in progress → complete)*
+**Phase 8 - Universe Opportunity Scanner** *(MVP verified)*
 
 ---
 
@@ -131,6 +131,124 @@
   - `pytest` passed: 140 tests passed.
   - `ruff check src tests` passed.
   - `ruff format --check src tests` passed.
+- **Phase 8 takeover and hardening completed**:
+  - Reviewed Claude Code's Phase 8 scanner work.
+  - `config/universes.yaml`: seed universe lists added for `nifty_50` and `nifty_next_50`; wording corrected so they are not presented as legally verified current index files.
+  - `config.py`: added `get_universes_config()`.
+  - `analytics/scanner/universe_scanner.py`: scans configured universes or explicit symbol lists through yfinance OHLCV, OHLCV validation, technical indicators, signal scanner, and composite score.
+  - Scanner now defaults to sequential yfinance scans for reliability, clamps unsafe worker counts, validates OHLCV before scoring, stores data-quality warnings, and degrades per-symbol instead of killing the whole scan.
+  - Streamlit: added "Top Opportunities (universe scan)" expander with universe selector, min score filter, min active-signal filter, progress bar, results table, data-quality warnings, and CSV export.
+  - Provider logging corrected from `%s` / `%d` placeholders to Loguru `{}` formatting for readable logs.
+  - `tests/test_universe_scanner.py`: scanner tests added and expanded for data-quality failure and worker-count clamping.
+  - `pytest` passed: 153 tests passed.
+  - `ruff check src tests` passed.
+  - `ruff format --check src tests` passed.
+  - Streamlit AppTest passed with 0 exceptions and 0 rendered errors.
+- **Phase 0-8 refinement pass completed**:
+  - UI header/disclaimer styling tightened for a cleaner Streamlit experience.
+  - `all_nse_listed` universe added as a CSV-backed local universe.
+  - `scripts/update_nse_universe.ps1` added to download NSE's official `EQUITY_L.csv`.
+  - Local NSE equity list downloaded successfully to `data/universe/nse_equity_list.csv`.
+  - Download result: 2,364 rows, including 2,167 `EQ` equity rows.
+  - Scanner UI now shows universe size, limits symbols per run, disables scans when CSV-backed universes are missing, and displays the refresh command.
+  - `docs/phase_0_8_refinement.md` added.
+- **Phase 8.1 completed**: scanner result persistence.
+  - `UniverseScanRun` and `UniverseScanResult` ORM tables added.
+  - `analytics/scanner/persistence.py` added to save scan runs, fetch the latest run, and convert saved rows back to a UI-ready DataFrame.
+  - Streamlit Top Opportunities scanner now saves each completed scan to SQLite and shows the latest saved scan for the selected universe.
+  - `tests/test_universe_scan_persistence.py` added.
+- **Phase 8.2 completed**: saved-scan comparison and local shortlist.
+  - Latest saved scan is compared against the previous saved scan for the same universe.
+  - UI now shows previous score, score change, signal-count change, newly active signals, and comparison status.
+  - `ResearchWatchlistItem` ORM table added for a local research shortlist.
+  - `analytics/scanner/watchlist.py` added to add/fetch/export shortlist rows.
+  - Streamlit Top Opportunities scanner now lets selected latest-scan symbols be added to the local research shortlist.
+  - `tests/test_research_watchlist.py` added.
+- **Phase 7/8 gap-fill completed**: sector-aware financial fundamentals and scanner filters.
+  - `analytics/fundamentals/sector_policy.py` added to identify banks/financial services and define sector-aware required fields.
+  - Fundamentals validation now applies bank-safe rules and no longer treats missing industrial fields as critical errors for financial stocks.
+  - Composite scoring now skips Altman Z-Score and industrial debt/equity penalties for financial-sector stocks.
+  - Streamlit selected-stock fundamentals UI now labels financial-sector rules and hides industrial working-capital metrics for banks/financials.
+  - Phase 8 latest saved scan now has filters for comparison status, minimum score change, and newly active signals.
+- **User-flow smoke pass completed**:
+  - Streamlit AppTest passed for default `RELIANCE.NS`, dropdown `HDFCBANK.NS`, and custom `HDFCBANK` entry with 0 exceptions and 0 rendered errors.
+  - Custom ticker entry now appends `.NS` automatically when the user enters a bare NSE symbol.
+  - Missing/stale ticker data now shows a beginner-readable explanation instead of a terse data error.
+  - `TATAMOTORS.NS` currently returns no yfinance price data in the smoke test and should be treated as a stale/source-specific symbol until verified against an official exchange source.
+  - `pytest` passed: 165 tests passed, 4 warnings.
+  - `.venv\Scripts\ruff.exe check src tests` passed.
+  - `.venv\Scripts\ruff.exe format --check src tests` passed.
+  - `scripts/health_check.ps1` passed all local checks, including Git identity.
+  - Localhost returned HTTP 200 at `http://localhost:8501`.
+- **RELIANCE.NS yfinance incomplete-row fix completed**:
+  - yfinance returned one latest RELIANCE.NS row with missing close/adjusted close on 2026-04-28.
+  - `YahooFinanceProvider` now drops incomplete OHLC rows while keeping valid historical rows.
+  - RELIANCE.NS provider check returned 1,234 usable rows, last valid close on 2026-04-24.
+  - Streamlit AppTest passed for RELIANCE.NS with 0 exceptions and 0 rendered errors.
+  - Localhost returned HTTP 200 after restarting Streamlit.
+  - `.venv\Scripts\ruff.exe check src tests` passed.
+  - `.venv\Scripts\ruff.exe format --check src tests` passed.
+  - `pytest tests\test_ohlcv_validator.py tests\test_universe_scanner.py` passed: 20 tests passed, 4 warnings.
+- **Phase 8.3 completed**: research shortlist review workflow.
+  - `ResearchWatchlistItem` now supports `review_status`, `tags`, and `notes`.
+  - Existing local SQLite databases are upgraded in-place with the new shortlist review columns.
+  - `analytics/scanner/watchlist.py` now supports review edits, inactive shortlist rows, and latest saved scanner score enrichment.
+  - Streamlit Top Opportunities section now shows an editable shortlist review table with status, tags, notes, active/inactive toggle, latest score, latest band, latest close, latest active signals, and source scan run.
+  - `tests/test_research_watchlist.py` expanded for review edits, inactive row hiding, latest score enrichment, and legacy SQLite column upgrade.
+  - `pytest` passed: 168 tests passed, 4 warnings.
+  - `.venv\Scripts\ruff.exe check src tests` passed.
+  - `.venv\Scripts\ruff.exe format --check src tests` passed.
+  - Streamlit AppTest passed with 0 exceptions and 0 rendered errors.
+  - Localhost returned HTTP 200 at `http://localhost:8501`.
+- **Phase 7.1 completed**: manual banking fundamentals template.
+  - `BankingFundamentalSnapshot` added for bank/financial-services metrics.
+  - `CsvBankingFundamentalsProvider` added for manual CSV-backed NIM, GNPA, NNPA, CASA, credit growth, deposit growth, and capital adequacy.
+  - Empty audited-data template added at `data/sample/banking_fundamentals_template.csv`.
+  - `validate_banking_fundamentals()` added with schema, duplicate year, numeric, percentage range, source URL, and last-updated checks.
+  - Streamlit financial-stock fundamentals section now shows banking metrics when rows exist, or a clear template path when no manual rows exist.
+  - HDFCBANK Streamlit AppTest passed with 0 exceptions and 0 rendered errors.
+  - `pytest` passed: 173 tests passed, 4 warnings.
+  - `.venv\Scripts\ruff.exe check src tests` passed.
+  - `.venv\Scripts\ruff.exe format --check src tests` passed.
+- **Phase 7.2 completed**: banking metrics composite score integration.
+  - `score_stock()` now accepts optional `banking_fundamentals` rows.
+  - Financial-sector fundamentals scoring uses manual banking metrics when validated CSV rows exist.
+  - Banking score logic rewards healthier NIM, lower GNPA/NNPA, stronger CASA, comfortable capital adequacy, and balanced credit/deposit growth.
+  - If no manual banking metrics exist, the composite score explicitly records `manual banking metrics` as missing and uses the general financial-sector fallback.
+  - Score explainability now includes manual banking metric source and last-updated metadata when available.
+  - Weak banking metrics add risk notes for elevated GNPA/NNPA, thin capital adequacy, and credit growth materially ahead of deposit growth.
+  - HDFCBANK Streamlit AppTest passed with 0 exceptions and 0 rendered errors.
+  - `pytest` passed: 175 tests passed, 4 warnings.
+  - `.venv\Scripts\ruff.exe check src tests` passed.
+  - `.venv\Scripts\ruff.exe format --check src tests` passed.
+- **Phase 7.3 entry support added**: banking metrics data-entry guide.
+  - `docs/banking_fundamentals_entry_guide.md` added with field definitions, source priority, and data-entry rules.
+  - Streamlit bank/financial fundamentals section now includes a data-entry helper when no manual banking rows exist.
+  - The helper shows the exact CSV header and a blank row skeleton for the selected symbol without inventing metric values.
+  - `.venv\Scripts\ruff.exe check src tests` passed.
+  - `.venv\Scripts\ruff.exe format --check src tests` passed.
+  - `pytest` passed: 175 tests passed, 4 warnings.
+  - Localhost returned HTTP 200 at `http://localhost:8501`.
+  - Streamlit AppTest passed for default `RELIANCE.NS` and dropdown `HDFCBANK.NS` with 0 exceptions and 0 rendered errors.
+- **Original prompt gap-fill completed**: selected-stock Data Trust panel.
+  - `ops/data_trust.py` added to summarize source freshness, missing inputs, validation warnings, and score reliability.
+  - Streamlit Composite Score section now shows a visible `Data trust` level, action-item count, and expandable source/reliability checklist.
+  - Banking metrics are marked not applicable for non-financial stocks, and marked as an action item for banks when audited manual rows are missing.
+  - `tests/test_data_trust.py` added.
+  - `pytest` passed: 178 tests passed, 4 warnings.
+  - `.venv\Scripts\ruff.exe check src tests` passed.
+  - `.venv\Scripts\ruff.exe format --check src tests` passed.
+  - Localhost returned HTTP 200 at `http://localhost:8501`.
+  - Streamlit AppTest passed for default `RELIANCE.NS` and dropdown `HDFCBANK.NS` with 0 exceptions and 0 rendered errors.
+- **Phase 8.4 reliability improvement completed**: one-click local app start.
+  - `scripts/run_app.ps1` upgraded into a robust local starter.
+  - `start_app.cmd` added for double-click startup on Windows.
+  - Startup now checks `.venv`, frees port `8501` when needed, starts Streamlit in the background, writes live logs, verifies HTTP 200, and opens `http://localhost:8501`.
+  - Live startup logs are written to `logs/streamlit_live_stdout.log` and `logs/streamlit_live_stderr.log`.
+  - Startup script verification passed with existing app detection, correct port PID capture, and HTTP 200.
+  - `pytest` passed: 178 tests passed, 4 warnings.
+  - `.venv\Scripts\ruff.exe check src tests` passed.
+  - `.venv\Scripts\ruff.exe format --check src tests` passed.
 
 ---
 
@@ -172,6 +290,27 @@
 - [x] Operations & Alerts section visible in Streamlit
 - [x] Data provenance tab visible in Streamlit
 - [x] Master prompt audit document added
+- [x] Phase 7 yfinance fundamentals provider added
+- [x] Phase 7 institutional holdings provider added
+- [x] Phase 7 multi-year CAGR, extended balance-sheet health, and price-structure gap fill added
+- [x] Phase 8 universe scanner added
+- [x] Phase 8 top-opportunities UI added
+- [x] Phase 8 scanner data-quality validation added
+- [x] `all_nse_listed` CSV-backed universe added
+- [x] Official NSE equity list downloaded locally for all-listed universe
+- [x] Phase 0-8 refinement review documented
+- [x] Phase 8.1 scanner results persisted to SQLite
+- [x] Phase 8.2 saved-scan comparison added
+- [x] Phase 8.2 local research shortlist added
+- [x] Phase 7 sector-aware bank/financial fundamentals rules added
+- [x] Phase 8 saved-scan comparison filters added
+- [x] Custom ticker UX improved: bare NSE symbols auto-normalize to `.NS`, and stale/no-data symbols show practical next checks
+- [x] Phase 8.3 research shortlist review workflow added
+- [x] Phase 7.1 manual banking fundamentals CSV template/provider/validator/UI added
+- [x] Phase 7.2 banking metrics integrated into composite score when manual rows exist
+- [x] Phase 7.3 banking metrics data-entry guide/helper added
+- [x] Selected-stock Data Trust panel added for source freshness, missing inputs, and score reliability
+- [x] One-click Windows startup script added for reliable localhost app launch
 - [ ] Initial commit pushed to private GitHub repo
 
 ---
@@ -181,7 +320,6 @@
 - PowerShell `CurrentUser` execution policy could not be changed in this environment; use process-scoped policy or run the app through `.venv\Scripts\python.exe -m streamlit ...`.
 - Running `.ps1` scripts directly may be blocked by Windows execution policy. Use a temporary process-only bypass when needed: `powershell -ExecutionPolicy Bypass -File .\scripts\health_check.ps1`.
 - Local Git repository is initialized, but no private GitHub remote is connected yet.
-- Git `user.name` and `user.email` are not configured locally yet, so the first commit needs those values before committing.
 
 ---
 
@@ -204,6 +342,8 @@
 - **Current**: SQLite fallback path configured through `DATABASE_URL`
 - **Phase 1 status**: stock universe and fundamentals schema foundation added; migrations and real provider still pending
 - **Phase 2 status**: signal audit rows are saved to local SQLite at `data/stock_platform.db`; repeated same-day scans are upserted instead of duplicated
+- **Phase 8.1 status**: universe scanner runs and per-symbol results are saved to local SQLite in `universe_scan_runs` and `universe_scan_results`
+- **Phase 8.2 status**: local research shortlist rows are saved in `research_watchlist_items`
 
 ---
 
@@ -215,6 +355,15 @@
 - Composite scoring, entry-zone, stop-loss, target-zone, risk/reward, and position-sizing MVPs exist; they remain educational approximations until validated with real data and backtests
 - Full raw-response storage with URL/timestamp provenance is not complete yet; the UI now shows a provenance summary for major local outputs.
 - Phase 6 alerts are preview-only. No Telegram/email delivery exists yet because alert compliance wording, rate limits, and user preferences must be reviewed first.
+- Phase 8 universe lists are seed watchlists. Refresh them from official NSE index files before treating them as current index membership.
+- Phase 8 scanner currently uses price/technical inputs first; universe-wide fundamentals and flow scoring are still limited.
+- Phase 8 scans run sequentially by default because live yfinance calls showed thread-safety issues during two-symbol verification.
+- Full all-listed scans can take a long time; use the UI's `Max symbols` control and increase gradually.
+- Saved scanner rows are append-only. There is no pruning/cleanup UI yet, so old local scan history may grow over time.
+- Research shortlist rows can now be edited with status/tags/notes and marked inactive. There is no permanent delete UI by design; keeping inactive rows is better for audit history.
+- Financial-sector rules prevent irrelevant industrial warnings. Manual banking metrics can now be entered through `data/sample/banking_fundamentals_template.csv`, but real values still need audited source entry and later official/provider automation.
+- Live yfinance symbols can be stale or unavailable even when a seed universe contains them. The UI now explains this, but the universe files still need periodic official refresh and symbol-change review.
+- yfinance can occasionally return an incomplete latest OHLC row. The provider now drops incomplete rows, so the chart may show the most recent fully usable trading day rather than the newest partially broken row.
 
 ---
 
@@ -258,9 +407,10 @@ See `README.md` -> "Folder structure".
 
 ```powershell
 # from the project root
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process -Force
-.\.venv\Scripts\python.exe -m streamlit run src\stock_platform\ui\streamlit_app.py
+powershell -ExecutionPolicy Bypass -File .\scripts\run_app.ps1
 ```
+
+Windows one-click option: double-click `start_app.cmd`.
 
 ## Current commands for daily health / backup
 
@@ -276,4 +426,4 @@ powershell -ExecutionPolicy Bypass -File .\scripts\backup_local.ps1
 
 ## Next planned task
 
-Configure Git `user.name` and `user.email`, connect a private GitHub remote, make the first commit, and push the verified local MVP.
+Build the Phase 8.5 Daily Research Dashboard: latest scan summary, new opportunities, biggest score changes, new signals, and Data Trust action items.

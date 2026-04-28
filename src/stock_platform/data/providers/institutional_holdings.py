@@ -37,7 +37,7 @@ def get_major_holders(symbol: str) -> pd.DataFrame:
         ticker = yf.Ticker(symbol)
         raw = ticker.major_holders
         if raw is None or (isinstance(raw, pd.DataFrame) and raw.empty):
-            log.info("yfinance major_holders: no data for %s", symbol)
+            log.info("yfinance major_holders: no data for {}", symbol)
             return pd.DataFrame(columns=_MAJOR_COLUMNS)
 
         frame = raw.copy().reset_index(drop=True)
@@ -49,11 +49,11 @@ def get_major_holders(symbol: str) -> pd.DataFrame:
             frame = frame.rename(columns={"Value": "value", "Breakdown": "category"})
             frame = frame[["category", "value"]]
 
-        log.info("yfinance major_holders: %d rows for %s", len(frame), symbol)
+        log.info("yfinance major_holders: {} rows for {}", len(frame), symbol)
         return frame
 
     except Exception as exc:
-        log.warning("yfinance major_holders failed for %s: %s", symbol, exc)
+        log.warning("yfinance major_holders failed for {}: {}", symbol, exc)
         return pd.DataFrame(columns=_MAJOR_COLUMNS)
 
 
@@ -67,7 +67,7 @@ def get_institutional_holders(symbol: str) -> pd.DataFrame:
         ticker = yf.Ticker(symbol)
         raw = ticker.institutional_holders
         if raw is None or (isinstance(raw, pd.DataFrame) and raw.empty):
-            log.info("yfinance institutional_holders: no data for %s", symbol)
+            log.info("yfinance institutional_holders: no data for {}", symbol)
             return pd.DataFrame(columns=_INST_COLUMNS)
 
         frame = raw.copy()
@@ -87,11 +87,11 @@ def get_institutional_holders(symbol: str) -> pd.DataFrame:
                 frame[col] = None
 
         frame = frame[_INST_COLUMNS].reset_index(drop=True)
-        log.info("yfinance institutional_holders: %d holders for %s", len(frame), symbol)
+        log.info("yfinance institutional_holders: {} holders for {}", len(frame), symbol)
         return frame
 
     except Exception as exc:
-        log.warning("yfinance institutional_holders failed for %s: %s", symbol, exc)
+        log.warning("yfinance institutional_holders failed for {}: {}", symbol, exc)
         return pd.DataFrame(columns=_INST_COLUMNS)
 
 
@@ -105,7 +105,7 @@ def get_mutualfund_holders(symbol: str) -> pd.DataFrame:
         ticker = yf.Ticker(symbol)
         raw = ticker.mutualfund_holders
         if raw is None or (isinstance(raw, pd.DataFrame) and raw.empty):
-            log.info("yfinance mutualfund_holders: no data for %s", symbol)
+            log.info("yfinance mutualfund_holders: no data for {}", symbol)
             return pd.DataFrame(columns=_INST_COLUMNS)
 
         frame = raw.copy()
@@ -124,11 +124,11 @@ def get_mutualfund_holders(symbol: str) -> pd.DataFrame:
                 frame[col] = None
 
         frame = frame[_INST_COLUMNS].reset_index(drop=True)
-        log.info("yfinance mutualfund_holders: %d holders for %s", len(frame), symbol)
+        log.info("yfinance mutualfund_holders: {} holders for {}", len(frame), symbol)
         return frame
 
     except Exception as exc:
-        log.warning("yfinance mutualfund_holders failed for %s: %s", symbol, exc)
+        log.warning("yfinance mutualfund_holders failed for {}: {}", symbol, exc)
         return pd.DataFrame(columns=_INST_COLUMNS)
 
 

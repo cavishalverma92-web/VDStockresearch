@@ -1,0 +1,131 @@
+# -----------------------------------------------------------------------------
+# Universe definitions for the Phase 8 scanner
+# -----------------------------------------------------------------------------
+# Each list is a curated set of NSE tickers (with .NS suffix) used by
+# `analytics.scanner.universe_scanner`.
+#
+# IMPORTANT: index constituents change quarterly. These are seed watchlists,
+# not a legally verified current index file. Update these lists from
+# https://archives.nseindia.com/content/indices/ind_nifty50list.csv
+# and similar URLs before treating them as official index membership.
+# -----------------------------------------------------------------------------
+
+version: 1
+
+# CSV-backed universes are read from local files. We intentionally do not commit
+# full exchange master files because listings change and source terms should be
+# reviewed before redistribution.
+csv_universes:
+  all_nse_listed:
+    path: data/universe/nse_equity_list.csv
+    symbol_column: SYMBOL
+    series_column: SERIES
+    series_value: EQ
+    source: NSE EQUITY_L.csv
+    notes: "Run scripts/update_nse_universe.ps1 to download the official NSE equity list locally."
+
+# --- Nifty 50 (top 50 by free-float market cap) ---
+nifty_50:
+  - RELIANCE.NS
+  - TCS.NS
+  - HDFCBANK.NS
+  - ICICIBANK.NS
+  - INFY.NS
+  - SBIN.NS
+  - BHARTIARTL.NS
+  - HINDUNILVR.NS
+  - ITC.NS
+  - LT.NS
+  - KOTAKBANK.NS
+  - AXISBANK.NS
+  - BAJFINANCE.NS
+  - ASIANPAINT.NS
+  - MARUTI.NS
+  - HCLTECH.NS
+  - SUNPHARMA.NS
+  - WIPRO.NS
+  - ULTRACEMCO.NS
+  - TITAN.NS
+  - NESTLEIND.NS
+  - M&M.NS
+  - TATASTEEL.NS
+  - POWERGRID.NS
+  - NTPC.NS
+  - JSWSTEEL.NS
+  - BAJAJFINSV.NS
+  - HDFCLIFE.NS
+  - ADANIENT.NS
+  - ADANIPORTS.NS
+  - ONGC.NS
+  - TATAMOTORS.NS
+  - COALINDIA.NS
+  - DRREDDY.NS
+  - GRASIM.NS
+  - INDUSINDBK.NS
+  - SBILIFE.NS
+  - TECHM.NS
+  - CIPLA.NS
+  - DIVISLAB.NS
+  - EICHERMOT.NS
+  - APOLLOHOSP.NS
+  - BPCL.NS
+  - BRITANNIA.NS
+  - HEROMOTOCO.NS
+  - HINDALCO.NS
+  - SHRIRAMFIN.NS
+  - TATACONSUM.NS
+  - UPL.NS
+  - LTIM.NS
+
+# --- Nifty Next 50 (rank 51-100 by free-float market cap) ---
+nifty_next_50:
+  - DMART.NS
+  - PIDILITIND.NS
+  - GODREJCP.NS
+  - ICICIPRULI.NS
+  - DABUR.NS
+  - SIEMENS.NS
+  - BAJAJHLDNG.NS
+  - INDIGO.NS
+  - HAVELLS.NS
+  - VEDL.NS
+  - ZOMATO.NS
+  - LICI.NS
+  - JIOFIN.NS
+  - IOC.NS
+  - DLF.NS
+  - VBL.NS
+  - AMBUJACEM.NS
+  - BANKBARODA.NS
+  - PFC.NS
+  - CHOLAFIN.NS
+  - PNB.NS
+  - GAIL.NS
+  - ICICIGI.NS
+  - MARICO.NS
+  - HAL.NS
+  - ZYDUSLIFE.NS
+  - TVSMOTOR.NS
+  - TRENT.NS
+  - LODHA.NS
+  - ABB.NS
+  - JINDALSTEL.NS
+  - CGPOWER.NS
+  - MOTHERSON.NS
+  - ADANIGREEN.NS
+  - ADANIPOWER.NS
+  - BAJAJ-AUTO.NS
+  - IRCTC.NS
+  - RECLTD.NS
+  - INDUSTOWER.NS
+  - SHREECEM.NS
+  - TORNTPHARM.NS
+  - BOSCHLTD.NS
+  - GODREJPROP.NS
+  - COLPAL.NS
+  - IDEA.NS
+  - BERGEPAINT.NS
+  - SBICARD.NS
+  - LUPIN.NS
+  - MUTHOOTFIN.NS
+  - PIIND.NS
