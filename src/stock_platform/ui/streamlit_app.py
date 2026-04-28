@@ -252,6 +252,16 @@ def _position_size(signal, portfolio_value: float) -> int | None:
     return int(max_rupee_risk // risk_per_share)
 
 
+def _universe_label(name: str) -> str:
+    """Render a universe option with its size, e.g. 'Nifty 50 · 50 stocks'."""
+    pretty = name.replace("_", " ").title()
+    try:
+        size = len(load_universe(name))
+        return f"{pretty} · {size:,} stocks"
+    except (FileNotFoundError, KeyError):
+        return f"{pretty} · n/a"
+
+
 # --------------------------------------------------------------------------- #
 # Page setup
 # --------------------------------------------------------------------------- #
@@ -265,52 +275,141 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    .block-container { padding-top: 1.4rem; padding-bottom: 2rem; }
+    /* ---------- Layout polish ---------- */
+    .block-container {
+        padding-top: 1.0rem;
+        padding-bottom: 2rem;
+        max-width: 1280px;
+    }
+    h1, h2, h3, h4 { letter-spacing: -0.01em; }
+    h2 {
+        margin-top: 1.5rem !important;
+        padding-bottom: 0.4rem;
+        border-bottom: 1px solid #E2E8F0;
+    }
+
+    /* ---------- Metric cards ---------- */
     div[data-testid="stMetric"] {
-        background: #ffffff;
-        border: 1px solid #e6e8eb;
-        border-radius: 8px;
-        padding: 0.75rem 0.9rem;
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 10px;
+        padding: 0.75rem 0.95rem;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        transition: border-color 0.15s ease;
     }
-    div[data-testid="stExpander"] {
-        border: 1px solid #e6e8eb;
-        border-radius: 8px;
+    div[data-testid="stMetric"]:hover { border-color: #CBD5E1; }
+    div[data-testid="stMetricLabel"] {
+        font-size: 0.78rem;
+        color: #64748B;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-weight: 600;
     }
-    .app-header {
-        border-bottom: 1px solid #e6e8eb;
-        padding-bottom: 0.85rem;
-        margin-bottom: 0.85rem;
-    }
-    .app-title {
-        font-size: 2rem;
+    div[data-testid="stMetricValue"] {
+        font-size: 1.45rem;
         font-weight: 700;
-        line-height: 1.15;
+        color: #0F172A;
+    }
+
+    /* ---------- Expanders, tabs, alerts ---------- */
+    div[data-testid="stExpander"] {
+        border: 1px solid #E2E8F0;
+        border-radius: 10px;
+        background: #FFFFFF;
+    }
+    div[data-testid="stExpander"] summary {
+        font-weight: 600;
+        color: #1E293B;
+    }
+    button[role="tab"] {
+        font-weight: 500 !important;
+        color: #64748B !important;
+    }
+    button[role="tab"][aria-selected="true"] {
+        color: #2563EB !important;
+        font-weight: 700 !important;
+    }
+    div[data-testid="stAlert"] {
+        border-radius: 10px;
+        border-width: 1px;
+        font-size: 0.9rem;
+    }
+
+    /* ---------- DataFrames ---------- */
+    div[data-testid="stDataFrame"] {
+        border: 1px solid #E2E8F0;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    /* ---------- App header ---------- */
+    .app-header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.4rem 0 1rem;
+        margin-bottom: 1rem;
+        border-bottom: 1px solid #E2E8F0;
+    }
+    .app-title-block { display: flex; flex-direction: column; }
+    .app-title {
+        font-size: 1.85rem;
+        font-weight: 800;
+        line-height: 1.1;
+        color: #0F172A;
         margin: 0;
+        letter-spacing: -0.02em;
     }
     .app-subtitle {
-        color: #59636e;
-        font-size: 0.95rem;
-        margin-top: 0.25rem;
+        color: #64748B;
+        font-size: 0.92rem;
+        margin-top: 0.3rem;
     }
     .phase-pill {
         display: inline-block;
-        border: 1px solid #d0d7de;
+        border: 1px solid #BFDBFE;
+        background: #DBEAFE;
+        color: #1E40AF;
         border-radius: 999px;
-        padding: 0.25rem 0.65rem;
-        font-size: 0.8rem;
-        color: #24292f;
-        background: #f6f8fa;
-        margin-top: 0.35rem;
+        padding: 0.3rem 0.75rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        white-space: nowrap;
     }
-    .disclaimer {
-        border-left: 4px solid #b7791f;
-        background: #fff8e5;
-        color: #3d3424;
+
+    /* ---------- Score badges ---------- */
+    .score-badge {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
         border-radius: 6px;
-        padding: 0.65rem 0.8rem;
-        margin-bottom: 1rem;
-        font-size: 0.9rem;
+        font-size: 0.78rem;
+        font-weight: 600;
+        margin-left: 0.4rem;
     }
+    .score-strong { background: #DCFCE7; color: #166534; border: 1px solid #BBF7D0; }
+    .score-watch  { background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+    .score-weak   { background: #FEE2E2; color: #991B1B; border: 1px solid #FECACA; }
+
+    /* ---------- Compact disclaimer ---------- */
+    .disclaimer {
+        border-left: 3px solid #F59E0B;
+        background: #FFFBEB;
+        color: #78350F;
+        border-radius: 6px;
+        padding: 0.55rem 0.8rem;
+        margin-bottom: 1rem;
+        font-size: 0.82rem;
+        line-height: 1.45;
+    }
+
+    /* ---------- Sidebar polish ---------- */
+    section[data-testid="stSidebar"] {
+        background: #F8FAFC;
+        border-right: 1px solid #E2E8F0;
+    }
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3 { color: #0F172A; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -322,10 +421,14 @@ st.markdown(
 
 st.markdown(
     """
-    <div class="disclaimer">
-      <strong>Disclaimer:</strong> Personal research aid only. Not investment advice,
-      not a SEBI-registered RA/RIA service, and not a guarantee of returns. Verify
-      source data before any decision.
+    <div class="app-header">
+      <div class="app-title-block">
+        <div class="app-title">📈 Indian Stock Research Platform</div>
+        <div class="app-subtitle">
+          Fundamentals · Technicals · Flows · Composite scoring · Backtests · Universe scanner
+        </div>
+      </div>
+      <span class="phase-pill">Phase 8.5 · 193 tests passing</span>
     </div>
     """,
     unsafe_allow_html=True,
@@ -333,12 +436,10 @@ st.markdown(
 
 st.markdown(
     """
-    <div class="app-header">
-      <div class="app-title">Indian Stock Research Platform</div>
-      <div class="app-subtitle">
-        Fundamentals, technicals, flows, scoring, backtesting, alert previews, and universe scanning.
-      </div>
-      <span class="phase-pill">Phase 8 MVP verified</span>
+    <div class="disclaimer">
+      <strong>Disclaimer:</strong> Personal research aid only. Not investment advice,
+      not a SEBI-registered RA/RIA service, and not a guarantee of returns.
+      Verify source data before any decision.
     </div>
     """,
     unsafe_allow_html=True,
@@ -360,7 +461,7 @@ if brief_universes:
         brief_universe = st.selectbox(
             "Brief universe",
             options=brief_universes,
-            format_func=lambda x: x.replace("_", " ").title(),
+            format_func=_universe_label,
             help="Uses the latest saved scan for this universe.",
             key="daily_brief_universe",
         )
@@ -555,8 +656,8 @@ with st.expander("🔭 Top Opportunities (universe scan)", expanded=False):
             chosen_universe = st.selectbox(
                 "Universe",
                 options=universes_available,
-                format_func=lambda x: x.replace("_", " ").title(),
-                help="Defined in config/universes.yaml.",
+                format_func=_universe_label,
+                help="Defined in config/universes.yaml. Use Mid-cap / Small-cap selects for broader research, all_nse_listed for the full ~2,000-stock NSE universe.",
             )
         with scan_col2:
             min_score = st.slider("Min composite score", 0, 100, 60, 5)

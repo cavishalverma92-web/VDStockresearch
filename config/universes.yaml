@@ -129,3 +129,140 @@ nifty_next_50:
   - LUPIN.NS
   - MUTHOOTFIN.NS
   - PIIND.NS
+
+# --- Curated mid-cap watchlist ---
+# This is NOT the official Nifty Midcap 150 — it is a hand-picked seed list of
+# widely-followed mid-cap names suitable for research. Refresh against the
+# official NSE Midcap 150 file when index membership matters.
+nifty_midcap_select:
+  - AUBANK.NS
+  - AUROPHARMA.NS
+  - ASTRAL.NS
+  - ABFRL.NS
+  - ALKEM.NS
+  - APLAPOLLO.NS
+  - ASHOKLEY.NS
+  - BALKRISIND.NS
+  - BANDHANBN.NS
+  - BHARATFORG.NS
+  - BHEL.NS
+  - BIOCON.NS
+  - BEL.NS
+  - CGCL.NS
+  - COFORGE.NS
+  - CONCOR.NS
+  - COROMANDEL.NS
+  - CROMPTON.NS
+  - CUMMINSIND.NS
+  - DALBHARAT.NS
+  - DEEPAKNTR.NS
+  - DIXON.NS
+  - ESCORTS.NS
+  - EXIDEIND.NS
+  - FEDERALBNK.NS
+  - GMRINFRA.NS
+  - GODREJIND.NS
+  - GUJGASLTD.NS
+  - IDFCFIRSTB.NS
+  - INDHOTEL.NS
+  - INDUSTOWER.NS
+  - IPCALAB.NS
+  - JUBLFOOD.NS
+  - KPITTECH.NS
+  - LICHSGFIN.NS
+  - LTTS.NS
+  - MANYAVAR.NS
+  - MAXHEALTH.NS
+  - MFSL.NS
+  - MPHASIS.NS
+  - MRF.NS
+  - NMDC.NS
+  - OBEROIRLTY.NS
+  - OFSS.NS
+  - PAGEIND.NS
+  - PERSISTENT.NS
+  - PETRONET.NS
+  - PHOENIXLTD.NS
+  - POLYCAB.NS
+  - POONAWALLA.NS
+  - PRESTIGE.NS
+  - SAIL.NS
+  - SOLARINDS.NS
+  - SRF.NS
+  - SUNDARMFIN.NS
+  - SUPREMEIND.NS
+  - SUZLON.NS
+  - TATACOMM.NS
+  - TATAELXSI.NS
+  - TIINDIA.NS
+  - TORNTPOWER.NS
+  - UBL.NS
+  - VOLTAS.NS
+  - YESBANK.NS
+
+# --- Curated small-cap watchlist ---
+# Hand-picked seed list of liquid small-cap names suitable for screening.
+# Small-caps carry higher liquidity and disclosure risk; verify each pick.
+nifty_smallcap_select:
+  - AAVAS.NS
+  - ANGELONE.NS
+  - APARINDS.NS
+  - APTUS.NS
+  - BIRLACORPN.NS
+  - BLUESTARCO.NS
+  - BSOFT.NS
+  - CAMS.NS
+  - CARTRADE.NS
+  - CDSL.NS
+  - CEATLTD.NS
+  - CENTRALBK.NS
+  - CHENNPETRO.NS
+  - CHEMPLASTS.NS
+  - CYIENT.NS
+  - DELHIVERY.NS
+  - EASEMYTRIP.NS
+  - ELGIEQUIP.NS
+  - ENGINERSIN.NS
+  - FINEORG.NS
+  - FORTIS.NS
+  - GLAND.NS
+  - GLENMARK.NS
+  - GRANULES.NS
+  - HAPPSTMNDS.NS
+  - HUDCO.NS
+  - IIFL.NS
+  - INDIAMART.NS
+  - INTELLECT.NS
+  - IRCON.NS
+  - JBCHEPHARM.NS
+  - JKCEMENT.NS
+  - JUSTDIAL.NS
+  - KAJARIACER.NS
+  - KARURVYSYA.NS
+  - KIMS.NS
+  - KPRMILL.NS
+  - LAURUSLABS.NS
+  - METROPOLIS.NS
+  - NAM-INDIA.NS
+  - NATIONALUM.NS
+  - NAVINFLUOR.NS
+  - NH.NS
+  - NIITLTD.NS
+  - PNCINFRA.NS
+  - PVRINOX.NS
+  - RAILTEL.NS
+  - RAJESHEXPO.NS
+  - REDINGTON.NS
+  - ROUTE.NS
+  - SCHAEFFLER.NS
+  - SONACOMS.NS
+  - SUNTV.NS
+  - SUPRIYA.NS
+  - SYRMA.NS
+  - TANLA.NS
+  - TATAINVEST.NS
+  - TIMKEN.NS
+  - TRIDENT.NS
+  - VINATIORGA.NS
+  - WHIRLPOOL.NS
+  - ZENSARTECH.NS

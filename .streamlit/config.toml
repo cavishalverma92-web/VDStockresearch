@@ -1,0 +1,29 @@
+# -----------------------------------------------------------------------------
+# Streamlit theme + runtime config
+# -----------------------------------------------------------------------------
+# Project-level visual identity. Edit colours/fonts here once instead of in
+# the app file. Secrets do not belong here — see .streamlit/secrets.toml
+# (which is gitignored).
+# -----------------------------------------------------------------------------
+
+[theme]
+# Base palette — modern slate/indigo with a tight accent. Optimized for both
+# light and dark Streamlit modes; primary works on either.
+base = "light"
+primaryColor = "#2563EB"           # indigo-600 — calls to action, sliders
+backgroundColor = "#FFFFFF"        # main canvas
+secondaryBackgroundColor = "#F1F5F9"  # slate-100 — cards, expanders
+textColor = "#0F172A"              # slate-900 — strong contrast
+font = "sans serif"
+
+[server]
+headless = true
+runOnSave = true
+fileWatcherType = "auto"
+
+[browser]
+gatherUsageStats = false
+
+[client]
+showErrorDetails = true
+toolbarMode = "minimal"
