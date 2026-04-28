@@ -94,6 +94,34 @@ def test_daily_brief_summarizes_latest_scan_changes() -> None:
     assert "BAD.NS" in brief.data_quality_actions["symbol"].tolist()
 
 
+def test_daily_brief_handles_scan_with_only_error_rows() -> None:
+    """Regression: a saved scan whose only result errored must not crash the brief.
+
+    Reproduces the KeyError: 'comparison_status' that surfaced in the UI when
+    the comparison frame had columns but zero successful rows.
+    """
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    save_universe_scan(
+        universe_name="nifty_50",
+        results=[_error("BAD.NS", "no price data")],
+        lookback_days=300,
+        engine=engine,
+    )
+
+    brief = build_daily_research_brief("nifty_50", engine=engine)
+
+    assert brief.has_latest_scan
+    assert brief.successful_symbols == 0
+    assert brief.failed_symbols == 1
+    assert brief.improved.empty
+    assert brief.weakened.empty
+    assert brief.new_opportunities.empty
+    assert brief.new_signals.empty
+    assert "BAD.NS" in brief.data_quality_actions["symbol"].tolist()
+
+
 def test_daily_brief_includes_shortlist_actions() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)

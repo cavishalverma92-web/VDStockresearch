@@ -62,25 +62,31 @@ def build_daily_research_brief(
     score_changes = _score_change_series(successful)
 
     improved = _top_rows(
-        successful[score_changes >= meaningful_score_change],
+        successful[score_changes >= meaningful_score_change] if len(successful) else successful,
         sort_by="score_change",
     )
     weakened = _top_rows(
-        successful[score_changes <= -meaningful_score_change],
+        successful[score_changes <= -meaningful_score_change] if len(successful) else successful,
         sort_by="score_change",
         ascending=True,
     )
-    new_opportunities = _top_rows(
-        successful[
-            successful["comparison_status"].isin(["new symbol", "new scan row"])
-            & (successful["composite_score"].fillna(0) >= min_opportunity_score)
-        ],
-        sort_by="composite_score",
-    )
-    new_signals = _top_rows(
-        successful[successful["new_active_signals"].fillna("").astype(str).str.strip() != ""],
-        sort_by="score_change",
-    )
+    if "comparison_status" in successful.columns and "composite_score" in successful.columns:
+        new_opportunities = _top_rows(
+            successful[
+                successful["comparison_status"].isin(["new symbol", "new scan row"])
+                & (successful["composite_score"].fillna(0) >= min_opportunity_score)
+            ],
+            sort_by="composite_score",
+        )
+    else:
+        new_opportunities = successful.iloc[0:0].copy()
+    if "new_active_signals" in successful.columns:
+        new_signals = _top_rows(
+            successful[successful["new_active_signals"].fillna("").astype(str).str.strip() != ""],
+            sort_by="score_change",
+        )
+    else:
+        new_signals = successful.iloc[0:0].copy()
     data_quality_actions = _data_quality_actions(comparison)
     shortlist_actions = _shortlist_actions(engine=engine)
 
@@ -134,14 +140,24 @@ def daily_brief_table(frame: pd.DataFrame, *, limit: int = 10) -> pd.DataFrame:
 
 
 def _successful_rows(frame: pd.DataFrame) -> pd.DataFrame:
-    if frame.empty or "error" not in frame.columns:
-        return pd.DataFrame()
+    """Return successful rows while preserving the comparison column structure.
+
+    Critically, even when the input is empty, the returned frame retains the
+    expected columns (``comparison_status``, ``new_active_signals``, ...) so
+    callers can apply column-based filters without ``KeyError``.
+    """
+    if "error" not in frame.columns:
+        # No comparison columns available at all; hand back an empty frame
+        # carrying any columns the caller already had.
+        return frame.iloc[0:0].copy()
+    if frame.empty:
+        return frame.copy()
     return frame[frame["error"].isna()].copy()
 
 
 def _score_change_series(frame: pd.DataFrame) -> pd.Series:
     if frame.empty or "score_change" not in frame.columns:
-        return pd.Series(dtype=float)
+        return pd.Series([], dtype=float, index=frame.index)
     return pd.to_numeric(frame["score_change"], errors="coerce").fillna(0)
 
 
@@ -164,7 +180,7 @@ def _top_rows(
 
 
 def _data_quality_actions(frame: pd.DataFrame) -> pd.DataFrame:
-    if frame.empty:
+    if frame.empty or "error" not in frame.columns or "data_quality_warnings" not in frame.columns:
         return daily_brief_table(frame)
 
     actions = frame[
