@@ -262,6 +262,64 @@ def _universe_label(name: str) -> str:
         return f"{pretty} · n/a"
 
 
+def _research_pick_button(
+    frame: pd.DataFrame,
+    *,
+    key: str,
+    column_config: dict | None = None,
+    hint: str = "Click any row above, then press **Research** to drill into that stock.",
+) -> None:
+    """Render a clickable dataframe + a Research-the-selected-symbol button.
+
+    Sets ``st.session_state['research_symbol']`` and reruns when the button is
+    clicked, which the sidebar reads to drive the per-stock detail view.
+    """
+    if frame.empty or "symbol" not in frame.columns:
+        st.dataframe(frame, width="stretch", hide_index=True, column_config=column_config or {})
+        return
+
+    selection = st.dataframe(
+        frame,
+        width="stretch",
+        hide_index=True,
+        on_select="rerun",
+        selection_mode="single-row",
+        key=key,
+        column_config=column_config or {},
+    )
+    rows = selection.get("selection", {}).get("rows", []) if hasattr(selection, "get") else []
+    if rows:
+        picked = str(frame.iloc[rows[0]]["symbol"])
+        if st.button(f"🔍 Research {picked}", type="primary", key=f"{key}_research_btn"):
+            st.session_state["research_symbol"] = picked
+            st.rerun()
+    else:
+        st.caption(hint)
+
+
+def _research_universe_options(extra: list[str] | None = None) -> list[str]:
+    """Return a sorted, deduped list of symbols suitable for the sidebar picker.
+
+    Combines every small inline universe (Nifty 50 / Next 50 / Mid-cap select /
+    Small-cap select). Excludes the huge ``all_nse_listed`` CSV universe — a
+    2,000+ option selectbox is unusable. Any extras (a custom ticker the user
+    just researched) are added to the front so they remain selectable.
+    """
+    symbols: set[str] = set()
+    for universe_name in list_available_universes():
+        if universe_name == "all_nse_listed":
+            continue
+        try:
+            symbols.update(load_universe(universe_name))
+        except (FileNotFoundError, KeyError):
+            continue
+
+    if extra:
+        symbols.update(s for s in extra if s)
+
+    return sorted(symbols)
+
+
 # --------------------------------------------------------------------------- #
 # Page setup
 # --------------------------------------------------------------------------- #
@@ -543,24 +601,22 @@ if brief_universes:
             ]
         )
 
+        _brief_columns = {
+            "composite_score": st.column_config.NumberColumn("Score", format="%.1f"),
+            "previous_score": st.column_config.NumberColumn("Prev score", format="%.1f"),
+            "score_change": st.column_config.NumberColumn("Score Δ", format="%+.1f"),
+            "active_signal_count": st.column_config.NumberColumn("Signals", format="%d"),
+        }
+
         with brief_tabs[0]:
             new_opp_table = daily_brief_table(daily_brief.new_opportunities)
             if new_opp_table.empty:
                 st.info("No new opportunity rows met the current brief score threshold.")
             else:
-                st.dataframe(
+                _research_pick_button(
                     new_opp_table,
-                    width="stretch",
-                    hide_index=True,
-                    column_config={
-                        "composite_score": st.column_config.NumberColumn("Score", format="%.1f"),
-                        "score_change": st.column_config.NumberColumn(
-                            "Score change", format="%+.1f"
-                        ),
-                        "active_signal_count": st.column_config.NumberColumn(
-                            "Signals", format="%d"
-                        ),
-                    },
+                    key="brief_new_opp_table",
+                    column_config=_brief_columns,
                 )
 
         with brief_tabs[1]:
@@ -571,21 +627,33 @@ if brief_universes:
                 if improved_table.empty:
                     st.info("No meaningful score improvers yet.")
                 else:
-                    st.dataframe(improved_table, width="stretch", hide_index=True)
+                    _research_pick_button(
+                        improved_table,
+                        key="brief_improved_table",
+                        column_config=_brief_columns,
+                    )
             with mover_col2:
                 st.markdown("##### Weakened")
                 weakened_table = daily_brief_table(daily_brief.weakened)
                 if weakened_table.empty:
                     st.info("No meaningful score weakeners yet.")
                 else:
-                    st.dataframe(weakened_table, width="stretch", hide_index=True)
+                    _research_pick_button(
+                        weakened_table,
+                        key="brief_weakened_table",
+                        column_config=_brief_columns,
+                    )
 
         with brief_tabs[2]:
             new_signal_table = daily_brief_table(daily_brief.new_signals)
             if new_signal_table.empty:
                 st.info("No newly active signals versus the previous saved scan.")
             else:
-                st.dataframe(new_signal_table, width="stretch", hide_index=True)
+                _research_pick_button(
+                    new_signal_table,
+                    key="brief_new_signals_table",
+                    column_config=_brief_columns,
+                )
 
         with brief_tabs[3]:
             action_table = daily_brief_table(daily_brief.data_quality_actions, limit=15)
@@ -760,10 +828,13 @@ with st.expander("🔭 Top Opportunities (universe scan)", expanded=False):
                         "data_quality_warnings",
                     ]
                 ]
-                st.dataframe(
+                scanner_selection = st.dataframe(
                     display,
                     width="stretch",
                     hide_index=True,
+                    on_select="rerun",
+                    selection_mode="single-row",
+                    key="scanner_results_table",
                     column_config={
                         "composite_score": st.column_config.NumberColumn("Score", format="%.1f"),
                         "active_signal_count": st.column_config.NumberColumn(
@@ -776,6 +847,29 @@ with st.expander("🔭 Top Opportunities (universe scan)", expanded=False):
                         "rsi_14": st.column_config.NumberColumn("RSI 14", format="%.1f"),
                     },
                 )
+
+                _selected_rows = scanner_selection.get("selection", {}).get("rows", [])
+                if _selected_rows:
+                    _picked_symbol = str(display.iloc[_selected_rows[0]]["symbol"])
+                    _btn_col, _hint_col = st.columns([1, 3])
+                    with _btn_col:
+                        if st.button(
+                            f"🔍 Research {_picked_symbol}",
+                            type="primary",
+                            key="scanner_research_btn",
+                        ):
+                            st.session_state["research_symbol"] = _picked_symbol
+                            st.rerun()
+                    with _hint_col:
+                        st.caption(
+                            "Loads the full per-stock view (fundamentals, technicals, "
+                            "signals, flows, holdings, composite score) for this symbol."
+                        )
+                else:
+                    st.caption(
+                        "Click any row above, then press **Research** to drill into that stock."
+                    )
+
                 st.download_button(
                     "Download scan results CSV",
                     data=display.to_csv(index=False),
@@ -846,27 +940,30 @@ with st.expander("🔭 Top Opportunities (universe scan)", expanded=False):
                         f"Compared against saved scan #{previous_run.id}. "
                         "Positive score change means the latest scan improved."
                     )
-                st.dataframe(
-                    latest_display[
-                        [
-                            "symbol",
-                            "composite_score",
-                            "previous_score",
-                            "score_change",
-                            "comparison_status",
-                            "band",
-                            "active_signal_count",
-                            "signal_count_change",
-                            "new_active_signals",
-                            "active_signals",
-                            "last_close",
-                            "rsi_14",
-                            "ma_stack",
-                            "data_quality_warnings",
-                        ]
-                    ],
+                _latest_display_cols = [
+                    "symbol",
+                    "composite_score",
+                    "previous_score",
+                    "score_change",
+                    "comparison_status",
+                    "band",
+                    "active_signal_count",
+                    "signal_count_change",
+                    "new_active_signals",
+                    "active_signals",
+                    "last_close",
+                    "rsi_14",
+                    "ma_stack",
+                    "data_quality_warnings",
+                ]
+                _latest_view = latest_display[_latest_display_cols]
+                latest_selection = st.dataframe(
+                    _latest_view,
                     width="stretch",
                     hide_index=True,
+                    on_select="rerun",
+                    selection_mode="single-row",
+                    key="latest_saved_scan_table",
                     column_config={
                         "composite_score": st.column_config.NumberColumn("Score", format="%.1f"),
                         "previous_score": st.column_config.NumberColumn(
@@ -883,6 +980,21 @@ with st.expander("🔭 Top Opportunities (universe scan)", expanded=False):
                         "rsi_14": st.column_config.NumberColumn("RSI 14", format="%.1f"),
                     },
                 )
+
+                _saved_rows = latest_selection.get("selection", {}).get("rows", [])
+                if _saved_rows:
+                    _saved_pick = str(_latest_view.iloc[_saved_rows[0]]["symbol"])
+                    if st.button(
+                        f"🔍 Research {_saved_pick}",
+                        type="primary",
+                        key="saved_scan_research_btn",
+                    ):
+                        st.session_state["research_symbol"] = _saved_pick
+                        st.rerun()
+                else:
+                    st.caption(
+                        "Click any row above, then press **Research** to drill into that stock."
+                    )
 
                 shortlist_options = list(latest_success["symbol"].head(50))
                 symbols_to_shortlist = st.multiselect(
@@ -1014,20 +1126,40 @@ settings = get_settings()
 universe = get_universe_config()
 starter = universe.get("starter_watchlist", ["RELIANCE.NS"])
 
+# Symbol pre-selected by clicking a row in the scanner / brief / shortlist
+_jumped_symbol = st.session_state.get("research_symbol")
+
+# Build the searchable picker list: every inline universe + the jumped symbol
+_picker_options = _research_universe_options(extra=[_jumped_symbol] if _jumped_symbol else None)
+if not _picker_options:
+    _picker_options = list(starter)
+
+# Default index: jumped symbol if set, else first starter, else first option
+if _jumped_symbol and _jumped_symbol in _picker_options:
+    _default_index = _picker_options.index(_jumped_symbol)
+elif starter and starter[0] in _picker_options:
+    _default_index = _picker_options.index(starter[0])
+else:
+    _default_index = 0
+
 with st.sidebar:
-    st.header("Inputs")
+    st.header("Research a stock")
+    st.caption(
+        f"Type to search across {len(_picker_options):,} curated NSE tickers. "
+        "Click a row in the scanner or shortlist to jump straight here."
+    )
     symbol = st.selectbox(
         "Ticker",
-        options=starter,
-        index=0,
-        help="Yahoo Finance symbol. `.NS` for NSE, `.BO` for BSE.",
+        options=_picker_options,
+        index=_default_index,
+        help="Yahoo Finance symbol. `.NS` for NSE, `.BO` for BSE. Type to filter.",
     )
     custom = st.text_input(
-        "Or enter a custom ticker",
+        "Or enter a ticker not in the list",
         value="",
-        placeholder="e.g. HDFCBANK or INFY.NS",
+        placeholder="e.g. RVNL or BHEL.NS",
         help=(
-            "For NSE stocks, you can type either HDFCBANK or HDFCBANK.NS. "
+            "For NSE stocks, you can type either RVNL or RVNL.NS. "
             "The app will try the .NS suffix automatically when no suffix is provided."
         ),
     )
@@ -1035,6 +1167,8 @@ with st.sidebar:
         symbol, symbol_note = _normalize_user_symbol(custom)
         if symbol_note:
             st.caption(symbol_note)
+        # Clear the jumped-symbol flag so manual entry takes precedence
+        st.session_state.pop("research_symbol", None)
 
     today = date.today()
     default_start = today - timedelta(days=5 * 365)
