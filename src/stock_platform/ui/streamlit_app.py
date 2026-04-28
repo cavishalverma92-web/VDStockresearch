@@ -64,6 +64,8 @@ from stock_platform.analytics.scanner import (  # noqa: E402
     add_symbols_to_watchlist,
     build_daily_research_brief,
     compare_latest_universe_scans,
+    daily_brief_freshness,
+    daily_brief_headline,
     daily_brief_table,
     enrich_watchlist_with_latest_scores,
     fetch_watchlist_items,
@@ -383,6 +385,26 @@ if brief_universes:
             "run a small scan, and this brief will populate automatically."
         )
     else:
+        # TL;DR headline
+        st.markdown(f"**{daily_brief_headline(daily_brief)}**")
+
+        # Freshness banner: green/amber/red based on age of latest saved scan
+        freshness_status, freshness_age = daily_brief_freshness(daily_brief.latest_run_at)
+        if freshness_status == "fresh":
+            st.success(f"Latest scan is fresh — saved {freshness_age}.")
+        elif freshness_status == "aging":
+            st.warning(
+                f"Latest scan is **{freshness_age}** — consider running a fresh scan "
+                "before relying on these rows for new decisions."
+            )
+        elif freshness_status == "stale":
+            st.error(
+                f"Latest scan is **{freshness_age}** — STALE. "
+                "Run a fresh scan in the Top Opportunities expander before using these rows."
+            )
+        else:
+            st.caption(f"Scan freshness: {freshness_age}.")
+
         brief_metric_cols = st.columns(6)
         brief_metric_cols[0].metric("Latest run", f"#{daily_brief.latest_run_id}")
         brief_metric_cols[1].metric("Successful", daily_brief.successful_symbols)

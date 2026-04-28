@@ -7,6 +7,8 @@ composite score) across an entire index list and ranks the results.
 from stock_platform.analytics.scanner.daily_brief import (
     DailyResearchBrief,
     build_daily_research_brief,
+    daily_brief_freshness,
+    daily_brief_headline,
     daily_brief_table,
 )
 from stock_platform.analytics.scanner.persistence import (
@@ -40,6 +42,8 @@ __all__ = [
     "build_daily_research_brief",
     "compare_latest_universe_scans",
     "compare_universe_scan_runs",
+    "daily_brief_freshness",
+    "daily_brief_headline",
     "daily_brief_table",
     "enrich_watchlist_with_latest_scores",
     "fetch_latest_universe_scan",

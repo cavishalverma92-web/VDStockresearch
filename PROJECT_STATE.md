@@ -426,4 +426,17 @@ powershell -ExecutionPolicy Bypass -File .\scripts\backup_local.ps1
 
 ## Next planned task
 
-Build the Phase 8.5 Daily Research Dashboard: latest scan summary, new opportunities, biggest score changes, new signals, and Data Trust action items.
+Set up Alembic migrations before the next ORM table is added (the in-place column upgrade for `ResearchWatchlistItem` will not scale).
+
+---
+
+## Recent updates
+
+- **Phase 8.5 polish completed (2026-04-29)**:
+  - `analytics/scanner/daily_brief.py`: `daily_brief_headline()` returns a one-line TL;DR (universe + counts of new opportunities, score movers, new signals, DQ actions, shortlist follow-ups), and `daily_brief_freshness()` classifies the latest saved scan as fresh / aging / stale / unknown with a human-readable age string.
+  - Streamlit Daily Research Brief now shows the TL;DR sentence above the metric row, plus a green/amber/red freshness banner so stale scans are not relied on by mistake.
+  - `tests/test_daily_brief.py`: 11 new tests (headline pluralisation + freshness for fresh/aging/stale/unknown/iso-string/naive-datetime/under-an-hour).
+  - `pytest` passed: 192 tests passed.
+  - `ruff check src tests` passed.
+  - `ruff format --check src tests` passed.
+  - Localhost returned HTTP 200 at `http://localhost:8501`.

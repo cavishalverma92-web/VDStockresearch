@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 import pandas as pd
 from sqlalchemy import Engine
@@ -13,6 +15,8 @@ from stock_platform.analytics.scanner.watchlist import (
     fetch_watchlist_items,
     watchlist_to_frame,
 )
+
+FreshnessStatus = Literal["fresh", "aging", "stale", "unknown"]
 
 
 @dataclass(frozen=True)
@@ -175,6 +179,98 @@ def _data_quality_actions(frame: pd.DataFrame) -> pd.DataFrame:
         ascending=[False, False, True],
         na_position="last",
     ).head(15)
+
+
+def daily_brief_headline(brief: DailyResearchBrief) -> str:
+    """Return a one-line TL;DR of the brief for at-a-glance scanning.
+
+    Examples:
+        "No saved scan yet for nifty_50."
+        "Nifty 50 scan #5 — 3 new opportunities, 2 score improvers,
+         1 newly active signal, 1 data-quality action."
+    """
+    if not brief.has_latest_scan:
+        return f"No saved scan yet for {brief.universe_name}."
+
+    parts: list[str] = []
+    new_opp = len(brief.new_opportunities)
+    improvers = len(brief.improved)
+    weakeners = len(brief.weakened)
+    new_sigs = len(brief.new_signals)
+    dq_actions = len(brief.data_quality_actions)
+    shortlist_actions = len(brief.shortlist_actions)
+
+    if new_opp:
+        parts.append(f"{new_opp} new opportunit{'y' if new_opp == 1 else 'ies'}")
+    if improvers:
+        parts.append(f"{improvers} score improver{'s' if improvers != 1 else ''}")
+    if weakeners:
+        parts.append(f"{weakeners} score weakener{'s' if weakeners != 1 else ''}")
+    if new_sigs:
+        parts.append(f"{new_sigs} newly active signal{'s' if new_sigs != 1 else ''}")
+    if dq_actions:
+        parts.append(f"{dq_actions} data-quality action{'s' if dq_actions != 1 else ''}")
+    if shortlist_actions:
+        parts.append(
+            f"{shortlist_actions} shortlist follow-up{'s' if shortlist_actions != 1 else ''}"
+        )
+
+    universe_label = brief.universe_name.replace("_", " ").title()
+    if not parts:
+        return f"{universe_label} scan #{brief.latest_run_id} — no notable changes since the previous scan."
+    return f"{universe_label} scan #{brief.latest_run_id} — " + ", ".join(parts) + "."
+
+
+def daily_brief_freshness(
+    latest_run_at: object | None,
+    *,
+    fresh_within_hours: int = 24,
+    stale_after_hours: int = 72,
+    now: datetime | None = None,
+) -> tuple[FreshnessStatus, str]:
+    """Classify scan freshness and return (status, human-readable age).
+
+    Statuses:
+        "fresh"   — scan is within ``fresh_within_hours`` (default 24h)
+        "aging"   — between ``fresh_within_hours`` and ``stale_after_hours``
+        "stale"   — older than ``stale_after_hours`` (default 72h)
+        "unknown" — no timestamp available
+    """
+    if latest_run_at is None:
+        return "unknown", "no saved scan timestamp"
+
+    if isinstance(latest_run_at, str):
+        try:
+            run_at = datetime.fromisoformat(latest_run_at.replace("Z", "+00:00"))
+        except ValueError:
+            return "unknown", "unparseable timestamp"
+    elif isinstance(latest_run_at, datetime):
+        run_at = latest_run_at
+    else:
+        return "unknown", "unsupported timestamp type"
+
+    if run_at.tzinfo is None:
+        run_at = run_at.replace(tzinfo=UTC)
+    current = (now or datetime.now(UTC)).astimezone(UTC)
+    age = current - run_at.astimezone(UTC)
+
+    age_text = _humanize_age(age)
+    if age <= timedelta(hours=fresh_within_hours):
+        return "fresh", age_text
+    if age <= timedelta(hours=stale_after_hours):
+        return "aging", age_text
+    return "stale", age_text
+
+
+def _humanize_age(age: timedelta) -> str:
+    total_minutes = int(age.total_seconds() // 60)
+    if total_minutes < 60:
+        return f"{max(total_minutes, 0)} minute{'s' if total_minutes != 1 else ''} ago"
+    total_hours = total_minutes // 60
+    if total_hours < 48:
+        return f"{total_hours} hour{'s' if total_hours != 1 else ''} ago"
+    total_days = total_hours // 24
+    return f"{total_days} day{'s' if total_days != 1 else ''} ago"
 
 
 def _shortlist_actions(*, engine: Engine | None = None) -> pd.DataFrame:

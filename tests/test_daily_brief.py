@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pandas as pd
 from sqlalchemy import create_engine
 
 from stock_platform.analytics.scanner import (
+    DailyResearchBrief,
     ScanResult,
     add_symbols_to_watchlist,
     build_daily_research_brief,
+    daily_brief_freshness,
+    daily_brief_headline,
     daily_brief_table,
     save_universe_scan,
 )
@@ -122,3 +127,128 @@ def test_daily_brief_table_has_stable_empty_columns() -> None:
         "data_quality_warnings",
         "error",
     ]
+
+
+# --------------------------------------------------------------------------- #
+# daily_brief_headline
+# --------------------------------------------------------------------------- #
+
+
+def _make_brief(
+    *,
+    has_scan: bool = True,
+    new_opp: int = 0,
+    improved: int = 0,
+    weakened: int = 0,
+    new_signals: int = 0,
+    dq_actions: int = 0,
+    shortlist_actions: int = 0,
+    universe_name: str = "nifty_50",
+    latest_run_id: int | None = 5,
+    latest_run_at: object | None = None,
+) -> DailyResearchBrief:
+    def _df(n: int) -> pd.DataFrame:
+        return pd.DataFrame({"symbol": [f"X{i}.NS" for i in range(n)]})
+
+    return DailyResearchBrief(
+        universe_name=universe_name,
+        latest_run_id=latest_run_id if has_scan else None,
+        previous_run_id=latest_run_id - 1 if has_scan and latest_run_id else None,
+        latest_run_at=latest_run_at,
+        requested_symbols=10 if has_scan else 0,
+        successful_symbols=8 if has_scan else 0,
+        failed_symbols=2 if has_scan else 0,
+        average_score=70.0 if has_scan else None,
+        top_score=90.0 if has_scan else None,
+        improved=_df(improved),
+        weakened=_df(weakened),
+        new_opportunities=_df(new_opp),
+        new_signals=_df(new_signals),
+        data_quality_actions=_df(dq_actions),
+        shortlist_actions=_df(shortlist_actions),
+    )
+
+
+def test_headline_no_scan() -> None:
+    brief = _make_brief(has_scan=False)
+    assert daily_brief_headline(brief) == "No saved scan yet for nifty_50."
+
+
+def test_headline_no_changes() -> None:
+    brief = _make_brief()
+    headline = daily_brief_headline(brief)
+    assert "no notable changes" in headline
+    assert "Nifty 50 scan #5" in headline
+
+
+def test_headline_combines_counts_with_correct_pluralization() -> None:
+    brief = _make_brief(new_opp=3, improved=1, new_signals=2, dq_actions=1)
+    headline = daily_brief_headline(brief)
+    assert "3 new opportunities" in headline
+    assert "1 score improver" in headline
+    assert "2 newly active signals" in headline
+    assert "1 data-quality action" in headline
+
+
+def test_headline_singular_opportunity() -> None:
+    brief = _make_brief(new_opp=1)
+    headline = daily_brief_headline(brief)
+    assert "1 new opportunity" in headline
+
+
+# --------------------------------------------------------------------------- #
+# daily_brief_freshness
+# --------------------------------------------------------------------------- #
+
+
+def test_freshness_unknown_when_no_timestamp() -> None:
+    status, age = daily_brief_freshness(None)
+    assert status == "unknown"
+    assert "no saved scan" in age
+
+
+def test_freshness_fresh_within_24h() -> None:
+    now = datetime(2026, 4, 29, 12, 0, tzinfo=UTC)
+    run_at = now - timedelta(hours=2)
+    status, age = daily_brief_freshness(run_at, now=now)
+    assert status == "fresh"
+    assert "2 hours ago" in age
+
+
+def test_freshness_aging_between_24_and_72_hours() -> None:
+    now = datetime(2026, 4, 29, 12, 0, tzinfo=UTC)
+    run_at = now - timedelta(hours=36)
+    status, age = daily_brief_freshness(run_at, now=now)
+    assert status == "aging"
+    assert "36 hours ago" in age
+
+
+def test_freshness_stale_past_72_hours() -> None:
+    now = datetime(2026, 4, 29, 12, 0, tzinfo=UTC)
+    run_at = now - timedelta(days=5)
+    status, age = daily_brief_freshness(run_at, now=now)
+    assert status == "stale"
+    assert "5 days ago" in age
+
+
+def test_freshness_handles_iso_string() -> None:
+    now = datetime(2026, 4, 29, 12, 0, tzinfo=UTC)
+    run_at_str = (now - timedelta(hours=1)).isoformat()
+    status, _ = daily_brief_freshness(run_at_str, now=now)
+    assert status == "fresh"
+
+
+def test_freshness_naive_datetime_treated_as_utc() -> None:
+    now = datetime(2026, 4, 29, 12, 0, tzinfo=UTC)
+    run_at = (now - timedelta(hours=2)).replace(tzinfo=None)
+    status, age = daily_brief_freshness(run_at, now=now)
+    assert status == "fresh"
+    assert "2 hours ago" in age
+
+
+def test_freshness_minutes_when_under_an_hour() -> None:
+    now = datetime(2026, 4, 29, 12, 0, tzinfo=UTC)
+    run_at = now - timedelta(minutes=30)
+    status, age = daily_brief_freshness(run_at, now=now)
+    assert status == "fresh"
+    assert "30 minutes ago" in age
