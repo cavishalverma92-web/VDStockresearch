@@ -54,6 +54,7 @@ class Settings(BaseSettings):
 
     # Providers
     provider_price: str = "yfinance"
+    market_data_provider: str = "kite"
     provider_fundamentals: str = "local_csv"
     fundamentals_csv_path: str = str(DATA_DIR / "sample/fundamentals_annual_sample.csv")
 
@@ -69,6 +70,10 @@ class Settings(BaseSettings):
     # Keys (may be empty in Phase 0)
     kite_api_key: str = ""
     kite_api_secret: str = ""
+    kite_access_token: str = ""
+    enable_kite_market_data: bool = True
+    enable_kite_trading: bool = False
+    enable_kite_portfolio: bool = False
     anthropic_api_key: str = ""
     openai_api_key: str = ""
 

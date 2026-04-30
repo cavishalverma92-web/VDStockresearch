@@ -16,6 +16,7 @@ pydantic-settings>=2.2,<3.0
 
 # Data
 yfinance>=0.2.40,<0.3.0
+kiteconnect>=5.0,<6.0
 pandas>=2.2,<3.0
 numpy>=1.26,<3.0
 

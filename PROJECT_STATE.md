@@ -6,7 +6,7 @@
 
 ## Current phase
 
-**Phase 8 - Universe Opportunity Scanner** *(MVP verified)*
+**Phase 8 - Product UX, scanner, research workflow, and safe broker-auth foundation** *(MVP verified)*
 
 ---
 
@@ -311,6 +311,9 @@
 - [x] Phase 7.3 banking metrics data-entry guide/helper added
 - [x] Selected-stock Data Trust panel added for source freshness, missing inputs, and score reliability
 - [x] One-click Windows startup script added for reliable localhost app launch
+- [x] Product UX/design pass added: cleaner sidebar navigation, research guardrails, interactive chart controls, and hover definitions for technical terms
+- [x] Zerodha Kite Connect market-data foundation added: Kite-preferred router, yfinance fallback, instrument metadata, LTP/OHLC/quote methods, historical candles, and safe auth setup
+- [x] Zerodha API Setup moved to a directly reachable standalone section in the Streamlit UI
 - [ ] Initial commit pushed to private GitHub repo
 
 ---
@@ -327,7 +330,8 @@
 
 | Source | Status | Used for | Notes |
 |---|---|---|---|
-| yfinance | connected | OHLCV prices (MVP) | Verified with `RELIANCE.NS`; adjusted prices still need review before research use |
+| Zerodha Kite Connect | preferred when configured | Market data + instrument metadata | Preferred provider for instrument master, token mapping, historical candles, LTP, OHLC, and quotes. No holdings, positions, funds, margins, orders, trades, or profile display are enabled. |
+| yfinance | connected fallback | OHLCV prices | Used automatically when Kite is not configured, token is missing/expired, Kite fails, instrument token is missing, validation fails, or `MARKET_DATA_PROVIDER=yfinance`. |
 | local CSV | connected | Fundamentals sample/template | Safe Phase 1 bridge; current sample rows are placeholders, not verified source data |
 | NSE equity API | connected | Delivery %, bulk/block deals | Phase 3; requires live network + browser-like session |
 | Screener.in | not yet | Fundamentals | Phase 1; verify ToS before connecting |
@@ -364,6 +368,7 @@
 - Financial-sector rules prevent irrelevant industrial warnings. Manual banking metrics can now be entered through `data/sample/banking_fundamentals_template.csv`, but real values still need audited source entry and later official/provider automation.
 - Live yfinance symbols can be stale or unavailable even when a seed universe contains them. The UI now explains this, but the universe files still need periodic official refresh and symbol-change review.
 - yfinance can occasionally return an incomplete latest OHLC row. The provider now drops incomplete rows, so the chart may show the most recent fully usable trading day rather than the newest partially broken row.
+- Zerodha Kite Connect is now the preferred market-data provider only when configured and usable. It does not show or fetch portfolio holdings, positions, funds, margins, orders, trades, or profile details. yfinance remains the automatic fallback.
 
 ---
 
@@ -394,6 +399,7 @@
 - [ ] Disclaimer text reviewed against SEBI RA/RIA guidelines before any monetization
 - [ ] Data source ToS reviewed before any redistribution
 - [ ] Legal review required before opening platform to any third party
+- [x] Zerodha trading and portfolio APIs intentionally disabled in UI/provider foundation
 
 ---
 
@@ -426,7 +432,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\backup_local.ps1
 
 ## Next planned task
 
-Set up Alembic migrations before the next ORM table is added (the in-place column upgrade for `ResearchWatchlistItem` will not scale).
+Manually configure Kite credentials, generate a fresh access token, test RELIANCE LTP/candles, then sync Kite NSE instruments locally.
 
 ---
 
@@ -439,4 +445,52 @@ Set up Alembic migrations before the next ORM table is added (the in-place colum
   - `pytest` passed: 192 tests passed.
   - `ruff check src tests` passed.
   - `ruff format --check src tests` passed.
+  - Localhost returned HTTP 200 at `http://localhost:8501`.
+- **Phase 8.6 product UX/design pass completed (2026-04-30)**:
+  - Streamlit sidebar now has clearer navigation links for Daily Brief, Universe Scanner, Fundamentals, Research Guardrails, Composite Score, Interactive Chart, Technicals, Flows & Events, and Operations.
+  - New Research Guardrails section added with compliance-safe research stance, supportive evidence, and risk checks. The UI avoids direct buy/sell advice and frames outputs as research queues only.
+  - Main chart is now more interactive: range slider, 1M/3M/6M/1Y/All range buttons, unified hover, optional Bollinger Bands, optional 52-week high/low levels, and optional volume overlay.
+  - Technical metrics now include hover definitions for RSI, MACD, ATR, relative volume, EMA, ATR %, historical volatility, 52-week high gap, MA stack, and Bollinger Bands.
+  - Daily brief empty-scan handling fixed so Streamlit does not crash when saved scanner rows are unavailable or all rows are errors.
+  - `pytest` passed: 193 tests passed, 4 warnings.
+  - `ruff check src tests` passed.
+  - `ruff format --check src tests` passed.
+  - Streamlit AppTest passed with 0 exceptions and 0 rendered errors.
+  - Localhost returned HTTP 200 at `http://localhost:8501`.
+- **Phase 8.7 Zerodha Kite auth foundation completed (2026-05-01)**:
+  - `kiteconnect` added to `requirements.txt`.
+  - `.env.example` and local `.env` now include `KITE_ACCESS_TOKEN=` placeholder.
+  - `KiteProvider` added with login URL generation, request-token exchange, local access-token handling, safe connection test, and future `get_historical_candles()` method.
+  - Streamlit now includes a `Zerodha API Setup` section with credential presence checks, login URL generation, request-token input, access-token generation, local `.env` save, and safe connection test.
+  - The UI and provider intentionally do not expose API secret, access token, profile details, holdings, positions, funds, margins, orders, trades, or trading actions.
+  - `docs/ZERODHA_KITE_SETUP.md` added with beginner setup instructions and disabled API list.
+  - yfinance remains the default data source and fallback.
+  - `kiteconnect==5.2.0` installed in the local virtual environment through `pip install -r requirements.txt`.
+  - `pytest` passed: 197 tests passed, 4 warnings.
+  - `ruff check src tests` passed.
+  - `ruff format --check src tests` passed.
+  - Streamlit AppTest passed with 0 exceptions and 0 rendered errors.
+  - Localhost returned HTTP 200 at `http://localhost:8501`.
+- **Phase 8.8 Zerodha Kite market-data default completed (2026-05-01)**:
+  - `MARKET_DATA_PROVIDER=kite`, `ENABLE_KITE_MARKET_DATA=true`, `ENABLE_KITE_TRADING=false`, and `ENABLE_KITE_PORTFOLIO=false` added to `.env.example` and local `.env` without overwriting existing values.
+  - `KiteProvider` expanded for instrument master, instrument token lookup, historical candles, LTP, OHLC, and quote data. Connection testing now uses market data, not profile.
+  - Portfolio/trading method names are blocked with `KiteSecurityError`; holdings, positions, funds, margins, orders, trades, and order actions remain disabled.
+  - `MarketDataProvider` router added: Kite preferred, yfinance fallback; `MARKET_DATA_PROVIDER=yfinance` bypasses Kite; `auto` uses Kite only when fully configured.
+  - Main Streamlit chart now uses the market-data router and visibly reports `Zerodha Kite` or `yfinance fallback`.
+  - Zerodha API Setup section now includes safe tests for Kite market-data connection, RELIANCE LTP, and RELIANCE historical candles.
+  - `scripts/sync_kite_instruments.py` added to cache NSE instruments under `data/raw/kite`, `data/processed/kite`, and `data/cache/kite`.
+  - `docs/ZERODHA_KITE_SETUP.md` updated for market-data default, fallback behavior, instrument sync, and security limits.
+  - `tests/test_market_data_provider.py` added and `tests/test_kite_provider.py` expanded.
+  - `pytest` passed: 204 tests passed, 4 warnings.
+  - `ruff check src tests scripts` passed.
+  - `ruff format --check src tests scripts` passed.
+  - Streamlit AppTest passed with 0 exceptions and 0 rendered errors.
+  - Instrument sync script was smoke-tested with missing credentials and failed gracefully with a beginner-readable message.
+- **Phase 8.9 Zerodha setup navigation fix completed (2026-05-01)**:
+  - Zerodha API Setup was moved out of the hidden Operations tab into a standalone page section.
+  - The sidebar link now points directly to `#zerodha-api-setup`, so clicking it scrolls to the setup controls.
+  - The Operations tabs now only contain Alert preview, Data provenance, Health checks, and Backup / GitHub.
+  - `ruff format --check src\stock_platform\ui\streamlit_app.py` passed.
+  - `ruff check src\stock_platform\ui\streamlit_app.py` passed.
+  - Streamlit AppTest passed with 0 exceptions and 0 rendered errors.
   - Localhost returned HTTP 200 at `http://localhost:8501`.

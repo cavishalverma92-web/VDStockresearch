@@ -98,6 +98,9 @@ from stock_platform.config import (  # noqa: E402
 from stock_platform.data.providers import (  # noqa: E402
     CsvBankingFundamentalsProvider,
     CsvFundamentalsProvider,
+    KiteProvider,
+    KiteProviderError,
+    MarketDataProvider,
     YahooFinanceProvider,
     YFinanceFundamentalsProvider,
 )
@@ -318,6 +321,101 @@ def _research_universe_options(extra: list[str] | None = None) -> list[str]:
         symbols.update(s for s in extra if s)
 
     return sorted(symbols)
+
+
+GLOSSARY = {
+    "RSI 14": "Relative Strength Index over 14 periods. Above 70 often means stretched momentum; below 30 often means oversold. It is context, not a standalone signal.",
+    "MACD": "Moving Average Convergence Divergence. It compares short- and medium-term EMAs to show momentum shifts.",
+    "ATR 14": "Average True Range over 14 periods. It estimates normal price movement and helps size stops or volatility risk.",
+    "Relative volume": "Current volume divided by recent average volume. Above 1 means trading activity is higher than usual.",
+    "20 EMA": "20-day Exponential Moving Average. A short-term trend line that reacts quickly to price changes.",
+    "50 EMA": "50-day Exponential Moving Average. A medium-term trend line often used to judge trend health.",
+    "100 EMA": "100-day Exponential Moving Average. A slower trend line between medium and long-term context.",
+    "200 EMA": "200-day Exponential Moving Average. A long-term trend reference watched by many market participants.",
+    "ATR %": "ATR as a percentage of price. Higher values mean the stock is more volatile relative to its price.",
+    "Historical volatility": "Annualized 20-day realized volatility. It estimates how unstable recent returns have been.",
+    "52W high gap": "How far the latest close is from the 52-week high. Negative values mean price is below that high.",
+    "MA stack": "Moving-average alignment. Bullish means shorter averages are above longer averages; bearish is the reverse.",
+    "Bollinger Bands": "A 20-period moving average plus/minus two standard deviations. Useful for volatility envelopes, not certainty.",
+}
+
+
+def _help(term: str) -> str:
+    return GLOSSARY.get(term, "")
+
+
+def _active_signal_names(signals) -> list[str]:
+    return [signal.name for signal in signals if signal.active]
+
+
+def _research_stance(composite, trust_level: str, active_signals: list[str]) -> tuple[str, str]:
+    """Compliance-safe research stance. It is not a buy/sell instruction."""
+    if trust_level == "Low":
+        return "Verify first", "Data gaps are too large for a confident research conclusion."
+    if composite.score >= 75 and len(active_signals) >= 2:
+        return (
+            "Accumulation watchlist candidate",
+            "Strong score and multiple active signals; verify valuation, data quality, and risk before any action.",
+        )
+    if composite.score >= 60:
+        return (
+            "Watch / hold research candidate",
+            "Score is constructive, but wait for stronger confirmation or cleaner data before upgrading.",
+        )
+    if composite.score <= 40:
+        return (
+            "Reduce / avoid-risk review",
+            "Weak score suggests this belongs in a risk-review queue rather than an opportunity list.",
+        )
+    return (
+        "Neutral watch",
+        "Mixed evidence. Keep on watchlist only if there is a separate research reason.",
+    )
+
+
+def _pros_cons(
+    composite, trust_rows: list[dict[str, object]], active_signals: list[str]
+) -> tuple[list[str], list[str]]:
+    pros = list(composite.reasons[:4])
+    if active_signals:
+        pros.append(f"Active technical signals: {', '.join(active_signals[:3])}.")
+    if composite.score >= 60:
+        pros.append(f"Composite score is constructive at {composite.score:.1f}/100.")
+
+    cons = list(composite.risks[:4])
+    if composite.missing_data:
+        cons.append(f"Missing/provisional inputs: {', '.join(composite.missing_data[:4])}.")
+    action_areas = [str(row.get("area")) for row in trust_rows if row.get("status") == "ACTION"]
+    if action_areas:
+        cons.append(f"Data Trust action areas: {', '.join(action_areas[:4])}.")
+    if not active_signals:
+        cons.append("No active technical signal fired in the current scan.")
+
+    return pros[:6] or ["No clear positive driver yet."], cons[:6] or [
+        "No major risk note surfaced by the MVP checks."
+    ]
+
+
+def _save_kite_access_token_to_env(access_token: str) -> None:
+    """Save a generated Kite access token to local .env without displaying it."""
+    env_path = ROOT_DIR / ".env"
+    if not env_path.exists():
+        raise FileNotFoundError(".env file was not found in the project root.")
+
+    lines = env_path.read_text(encoding="utf-8").splitlines()
+    updated = False
+    new_lines: list[str] = []
+    for line in lines:
+        if line.startswith("KITE_ACCESS_TOKEN="):
+            new_lines.append(f"KITE_ACCESS_TOKEN={access_token}")
+            updated = True
+        else:
+            new_lines.append(line)
+    if not updated:
+        new_lines.append(f"KITE_ACCESS_TOKEN={access_token}")
+
+    env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+    log.info("Kite access token saved to local .env without displaying token.")
 
 
 # --------------------------------------------------------------------------- #
@@ -705,6 +803,7 @@ if brief_universes:
 # Top Opportunities scanner (Phase 8)
 # --------------------------------------------------------------------------- #
 
+st.markdown('<span id="top-opportunities-universe-scan"></span>', unsafe_allow_html=True)
 with st.expander("🔭 Top Opportunities (universe scan)", expanded=False):
     st.caption(
         "Run the platform's per-stock pipeline (price → indicators → signals → "
@@ -1143,6 +1242,22 @@ else:
     _default_index = 0
 
 with st.sidebar:
+    st.markdown("### Navigate")
+    st.markdown(
+        """
+        - [Daily brief](#daily-research-brief)
+        - [Universe scanner](#top-opportunities-universe-scan)
+        - [Fundamentals](#fundamentals)
+        - [Research guardrails](#research-guardrails)
+        - [Composite score](#composite-score)
+        - [Interactive chart](#interactive-chart)
+        - [Technicals](#technicals)
+        - [Flows & events](#flows-events)
+        - [Zerodha API setup](#zerodha-api-setup)
+        - [Operations](#operations-alerts)
+        """
+    )
+    st.markdown("---")
     st.header("Research a stock")
     st.caption(
         f"Type to search across {len(_picker_options):,} curated NSE tickers. "
@@ -1180,7 +1295,7 @@ with st.sidebar:
     st.markdown("---")
     st.caption(f"Environment: `{settings.app_env}`")
     st.caption(f"Log level: `{settings.app_log_level}`")
-    st.caption(f"Price provider: `{settings.provider_price}`")
+    st.caption(f"Market data provider: `{settings.market_data_provider}`")
     st.caption(f"Fundamentals provider: `{settings.provider_fundamentals}`")
     portfolio_value = st.number_input(
         "Portfolio value for position sizing",
@@ -1194,7 +1309,7 @@ with st.sidebar:
 # Fetch + validate
 # --------------------------------------------------------------------------- #
 
-provider = YahooFinanceProvider()
+provider = MarketDataProvider()
 
 with st.spinner(f"Downloading {symbol}…"):
     try:
@@ -1209,9 +1324,9 @@ if df.empty:
     st.info(
         "What this usually means: the symbol is typed incorrectly, the exchange suffix is wrong, "
         "the company symbol has changed, the stock is inactive/delisted, the selected date range "
-        "has no trading days, or yfinance is temporarily missing the data. Try a known live symbol "
-        "such as RELIANCE.NS or HDFCBANK.NS, then update the local universe list if this symbol "
-        "is stale."
+        "has no trading days, Kite/yfinance is temporarily missing the data, or Kite could not map "
+        "the instrument token. Try a known live symbol such as RELIANCE.NS or HDFCBANK.NS, then "
+        "update the local universe list if this symbol is stale."
     )
     st.stop()
 
@@ -1224,12 +1339,15 @@ except OHLCVValidationError as exc:
 technical_df = add_technical_indicators(df)
 latest_technical = technical_df.iloc[-1]
 technical_signals = scan_technical_signals(df)
+price_source = str(df.attrs.get("source") or provider.last_source or "unknown")
+price_provider_label = str(df.attrs.get("provider_label") or price_source)
+fallback_reason = str(df.attrs.get("fallback_reason") or provider.last_warning or "")
 try:
     saved_signal_count = save_signal_audit(
         symbol,
         df,
         technical_signals,
-        source=settings.provider_price,
+        source=price_source,
     )
 except Exception as exc:  # noqa: BLE001
     saved_signal_count = 0
@@ -1243,11 +1361,19 @@ latest = df.iloc[-1]
 prev = df.iloc[-2] if len(df) > 1 else latest
 pct = ((latest["close"] - prev["close"]) / prev["close"]) * 100 if prev["close"] else 0.0
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("Symbol", symbol)
 c2.metric("Last close", f"₹{latest['close']:.2f}", f"{pct:+.2f}% d/d")
 c3.metric("Rows", f"{len(df):,}")
 c4.metric("Last date", df.index[-1].strftime("%Y-%m-%d"))
+c5.metric("Data source", price_provider_label)
+
+if fallback_reason:
+    st.warning(fallback_reason)
+elif price_source == "kite":
+    st.success("Data source: Zerodha Kite")
+elif price_source == "yfinance":
+    st.info("Data source: yfinance fallback")
 
 # --------------------------------------------------------------------------- #
 # Data quality panel
@@ -1790,6 +1916,34 @@ trust_col_3.metric(
     sum(1 for row in trust_rows if row["status"] == "ACTION"),
 )
 
+st.subheader("Research Guardrails")
+active_signal_names = _active_signal_names(technical_signals)
+stance, stance_detail = _research_stance(composite, trust_level, active_signal_names)
+pros, cons = _pros_cons(composite, trust_rows, active_signal_names)
+
+stance_cols = st.columns([1.3, 2.4, 1.3])
+stance_cols[0].metric("Research stance", stance)
+stance_cols[1].info(stance_detail)
+stance_cols[2].metric(
+    "Active signals",
+    len(active_signal_names),
+    help="Number of educational technical patterns currently active. Not a trading instruction.",
+)
+st.caption(
+    "Guardrail wording is deliberately non-advisory. Treat `accumulation`, `watch`, "
+    "or `reduce-risk` as research queues, not direct buy/sell instructions."
+)
+
+pros_col, cons_col = st.columns(2)
+with pros_col:
+    st.markdown("##### Pros / supportive evidence")
+    for item in pros:
+        st.markdown(f"- {item}")
+with cons_col:
+    st.markdown("##### Cons / risk checks")
+    for item in cons:
+        st.markdown(f"- {item}")
+
 with st.expander("Data Trust: source freshness, missing inputs, and score reliability"):
     st.dataframe(
         data_trust_rows_to_frame(trust_rows),
@@ -1874,7 +2028,7 @@ with alert_tab:
 with provenance_tab:
     provenance_rows = build_provenance_rows(
         symbol=symbol,
-        price_provider=settings.provider_price,
+        price_provider=price_provider_label,
         fundamentals_provider=_fundamentals_source_label,
         price_frame=df,
         fundamentals_source=_fundamentals_source_label,
@@ -1886,6 +2040,157 @@ with provenance_tab:
         "This table is the plain-English audit trail for the current screen. "
         "It separates source data from locally derived analytics."
     )
+
+st.markdown('<span id="zerodha-api-setup"></span>', unsafe_allow_html=True)
+st.subheader("Zerodha API Setup")
+st.warning(
+    "No portfolio, holdings, funds, margins, order, trade, order placement, "
+    "order modification, or order cancellation APIs are enabled in this app."
+)
+st.caption(
+    "Kite is used only for market data and instrument metadata in this phase. "
+    "yfinance remains available as fallback."
+)
+st.info(
+    f"Market data provider selected: `{settings.market_data_provider}`. "
+    "Behavior: `kite` prefers Kite and falls back to yfinance; `yfinance` skips Kite; "
+    "`auto` uses Kite only when credentials and access token exist."
+)
+
+kite_provider = KiteProvider(
+    api_key=settings.kite_api_key,
+    api_secret=settings.kite_api_secret,
+    access_token=settings.kite_access_token,
+)
+kite_status_cols = st.columns(3)
+kite_status_cols[0].metric(
+    "KITE_API_KEY configured",
+    "Yes" if bool(settings.kite_api_key.strip()) else "No",
+)
+kite_status_cols[1].metric(
+    "KITE_API_SECRET configured",
+    "Yes" if bool(settings.kite_api_secret.strip()) else "No",
+)
+kite_status_cols[2].metric(
+    "KITE_ACCESS_TOKEN configured",
+    "Yes" if bool(settings.kite_access_token.strip()) else "No",
+)
+kite_flags_cols = st.columns(3)
+kite_flags_cols[0].metric(
+    "Kite market data",
+    "Enabled" if settings.enable_kite_market_data else "Disabled",
+)
+kite_flags_cols[1].metric(
+    "Kite trading",
+    "Disabled" if not settings.enable_kite_trading else "Blocked",
+)
+kite_flags_cols[2].metric(
+    "Kite portfolio",
+    "Disabled" if not settings.enable_kite_portfolio else "Blocked",
+)
+
+if st.button("Generate Zerodha Login URL"):
+    try:
+        login_url = kite_provider.get_login_url()
+        st.success("Login URL generated. Open it, complete Zerodha login, then copy request_token.")
+        st.link_button("Open Zerodha login", login_url)
+        st.code(login_url, language="text")
+    except KiteProviderError as exc:
+        st.error(str(exc))
+
+request_token = st.text_input(
+    "Paste temporary request_token",
+    type="password",
+    help=(
+        "After Zerodha redirects to localhost, copy only the value after "
+        "`request_token=` from the browser address bar."
+    ),
+)
+if st.button("Generate Access Token"):
+    try:
+        result = kite_provider.generate_session(request_token)
+        st.session_state["kite_generated_access_token"] = result["access_token"]
+        st.success(
+            "Access token generated and kept only in this local Streamlit session. "
+            "The full token is not displayed."
+        )
+        st.info(
+            "To persist it for local development, save it to `.env` as "
+            "`KITE_ACCESS_TOKEN`. Use the button below to save locally without "
+            "showing the token."
+        )
+    except KiteProviderError as exc:
+        st.error(str(exc))
+    except Exception:
+        log.warning("Kite access token generation failed.")
+        st.error(
+            "Could not generate access token. The request_token may be expired, "
+            "already used, or the API secret may be incorrect."
+        )
+
+generated_token = st.session_state.get("kite_generated_access_token")
+if generated_token and st.button("Save generated token to local .env"):
+    try:
+        _save_kite_access_token_to_env(str(generated_token))
+        st.success(
+            "Saved KITE_ACCESS_TOKEN to local `.env` without displaying it. "
+            "Restart Streamlit so settings reload the token."
+        )
+    except Exception as exc:
+        st.error(f"Could not save token locally: {exc}")
+
+if st.button("Test Kite Market Data Connection"):
+    result = kite_provider.connection_test()
+    if result["ok"]:
+        st.success(result["message"])
+    else:
+        st.warning(result["message"])
+
+kite_test_cols = st.columns(2)
+with kite_test_cols[0]:
+    if st.button("Test RELIANCE LTP from Kite"):
+        try:
+            ltp_frame = kite_provider.get_ltp(["RELIANCE"])
+            if ltp_frame.empty:
+                st.warning("Kite returned no LTP rows for RELIANCE.")
+            else:
+                safe_cols = [
+                    col for col in ["symbol", "exchange", "ltp", "source"] if col in ltp_frame
+                ]
+                st.dataframe(ltp_frame[safe_cols], width="stretch", hide_index=True)
+        except KiteProviderError as exc:
+            st.warning(str(exc))
+        except Exception:
+            log.warning("Kite RELIANCE LTP test failed.")
+            st.warning("Kite LTP test failed. Regenerate token or check Kite subscription.")
+with kite_test_cols[1]:
+    if st.button("Test RELIANCE historical candles from Kite"):
+        try:
+            candle_frame = kite_provider.get_historical_candles(
+                "RELIANCE",
+                from_date=start,
+                to_date=end,
+                interval="day",
+            )
+            if candle_frame.empty:
+                st.warning("Kite returned no candle rows for RELIANCE.")
+            else:
+                st.success(
+                    f"Kite returned {len(candle_frame):,} candle rows from "
+                    f"{candle_frame.index.min().date()} to {candle_frame.index.max().date()}."
+                )
+        except KiteProviderError as exc:
+            st.warning(str(exc))
+        except Exception:
+            log.warning("Kite RELIANCE candle test failed.")
+            st.warning("Kite candle test failed. Regenerate token or check instrument access.")
+
+st.markdown("##### Documentation")
+st.code(r"docs\ZERODHA_KITE_SETUP.md", language="text")
+st.caption(
+    "Security note: the app never displays API secret, access token, profile details, "
+    "holdings, positions, funds, margins, orders, trades, or request token."
+)
 
 with health_tab:
     health_checks = run_health_checks()
@@ -1922,6 +2227,25 @@ with backup_tab:
 # Chart
 # --------------------------------------------------------------------------- #
 
+st.subheader("Interactive Chart")
+chart_col1, chart_col2 = st.columns([2, 1])
+with chart_col1:
+    chart_overlays = st.multiselect(
+        "Additional overlays",
+        options=["Bollinger Bands", "52W high / low"],
+        default=[],
+        help=(
+            "The chart is interactive: zoom, drag, use the range buttons, and click legend "
+            "items to hide or isolate series."
+        ),
+    )
+with chart_col2:
+    show_volume_overlay = st.checkbox(
+        "Volume overlay",
+        value=False,
+        help="Adds volume bars on a secondary axis. Use this to confirm participation behind price moves.",
+    )
+
 fig = go.Figure(
     data=[
         go.Candlestick(
@@ -1938,7 +2262,7 @@ fig.update_layout(
     title=f"{symbol} — Daily candlestick",
     xaxis_title="Date",
     yaxis_title="Price (₹)",
-    xaxis_rangeslider_visible=False,
+    xaxis_rangeslider_visible=True,
     height=600,
     margin=dict(l=20, r=20, t=50, b=20),
 )
@@ -1950,6 +2274,80 @@ fig.add_trace(
 )
 fig.add_trace(
     go.Scatter(x=technical_df.index, y=technical_df["ema_200"], mode="lines", name="200 EMA")
+)
+if "Bollinger Bands" in chart_overlays:
+    fig.add_trace(
+        go.Scatter(
+            x=technical_df.index,
+            y=technical_df["bb_upper"],
+            mode="lines",
+            name="BB upper",
+            line=dict(width=1, dash="dot"),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=technical_df.index,
+            y=technical_df["bb_lower"],
+            mode="lines",
+            name="BB lower",
+            line=dict(width=1, dash="dot"),
+            fill="tonexty",
+            fillcolor="rgba(100,116,139,0.08)",
+        )
+    )
+if "52W high / low" in chart_overlays:
+    fig.add_trace(
+        go.Scatter(
+            x=technical_df.index,
+            y=technical_df["high_52w"],
+            mode="lines",
+            name="52W high",
+            line=dict(width=1, dash="dash"),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=technical_df.index,
+            y=technical_df["low_52w"],
+            mode="lines",
+            name="52W low",
+            line=dict(width=1, dash="dash"),
+        )
+    )
+if show_volume_overlay:
+    fig.add_trace(
+        go.Bar(
+            x=technical_df.index,
+            y=technical_df["volume"],
+            name="Volume",
+            yaxis="y2",
+            marker_color="rgba(100,116,139,0.25)",
+            hovertemplate="Volume: %{y:,.0f}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        yaxis2=dict(
+            title="Volume",
+            overlaying="y",
+            side="right",
+            showgrid=False,
+        )
+    )
+fig.update_layout(
+    hovermode="x unified",
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+)
+fig.update_xaxes(
+    rangeselector=dict(
+        buttons=[
+            dict(count=1, label="1M", step="month", stepmode="backward"),
+            dict(count=3, label="3M", step="month", stepmode="backward"),
+            dict(count=6, label="6M", step="month", stepmode="backward"),
+            dict(count=1, label="1Y", step="year", stepmode="backward"),
+            dict(step="all", label="All"),
+        ]
+    )
 )
 st.plotly_chart(fig, width="stretch")
 
@@ -1966,24 +2364,42 @@ tech_tab, structure_tab, signal_tab, backtest_tab = st.tabs(
 
 with tech_tab:
     t1, t2, t3, t4 = st.columns(4)
-    t1.metric("RSI 14", _format_number(latest_technical.get("rsi_14")))
-    t2.metric("MACD", _format_number(latest_technical.get("macd")))
-    t3.metric("ATR 14", _format_currency(latest_technical.get("atr_14")))
-    t4.metric("Relative volume", _format_number(latest_technical.get("relative_volume")))
+    t1.metric("RSI 14", _format_number(latest_technical.get("rsi_14")), help=_help("RSI 14"))
+    t2.metric("MACD", _format_number(latest_technical.get("macd")), help=_help("MACD"))
+    t3.metric("ATR 14", _format_currency(latest_technical.get("atr_14")), help=_help("ATR 14"))
+    t4.metric(
+        "Relative volume",
+        _format_number(latest_technical.get("relative_volume")),
+        help=_help("Relative volume"),
+    )
 
     t5, t6, t7, t8 = st.columns(4)
-    t5.metric("20 EMA", _format_currency(latest_technical.get("ema_20")))
-    t6.metric("50 EMA", _format_currency(latest_technical.get("ema_50")))
-    t7.metric("100 EMA", _format_currency(latest_technical.get("ema_100")))
-    t8.metric("200 EMA", _format_currency(latest_technical.get("ema_200")))
+    t5.metric("20 EMA", _format_currency(latest_technical.get("ema_20")), help=_help("20 EMA"))
+    t6.metric("50 EMA", _format_currency(latest_technical.get("ema_50")), help=_help("50 EMA"))
+    t7.metric("100 EMA", _format_currency(latest_technical.get("ema_100")), help=_help("100 EMA"))
+    t8.metric("200 EMA", _format_currency(latest_technical.get("ema_200")), help=_help("200 EMA"))
 
     t9, t10, t11, t12 = st.columns(4)
-    t9.metric("ATR %", _format_pct(latest_technical.get("atr_pct") / 100))
-    t10.metric("Hist. vol 20D", _format_pct(latest_technical.get("historical_volatility_20") / 100))
-    t11.metric(
-        "52W high gap", _format_pct(latest_technical.get("distance_from_52w_high_pct") / 100)
+    t9.metric("ATR %", _format_pct(latest_technical.get("atr_pct") / 100), help=_help("ATR %"))
+    t10.metric(
+        "Hist. vol 20D",
+        _format_pct(latest_technical.get("historical_volatility_20") / 100),
+        help=_help("Historical volatility"),
     )
-    t12.metric("MA stack", str(latest_technical.get("ma_stack_status", "mixed")).title())
+    t11.metric(
+        "52W high gap",
+        _format_pct(latest_technical.get("distance_from_52w_high_pct") / 100),
+        help=_help("52W high gap"),
+    )
+    t12.metric(
+        "MA stack",
+        str(latest_technical.get("ma_stack_status", "mixed")).title(),
+        help=_help("MA stack"),
+    )
+
+    with st.expander("Indicator definitions"):
+        glossary_rows = [{"Term": term, "Definition": text} for term, text in GLOSSARY.items()]
+        st.dataframe(glossary_rows, width="stretch", hide_index=True)
 
 with structure_tab:
     st.caption(
@@ -2540,7 +2956,7 @@ with st.expander("📄 Show recent rows"):
 
 st.markdown("---")
 st.caption(
-    "Source: yfinance (Yahoo Finance). Not for redistribution. "
+    f"Source: {price_provider_label}. Not for redistribution. "
     "Verify data against official NSE/BSE sources before any decision."
 )
 

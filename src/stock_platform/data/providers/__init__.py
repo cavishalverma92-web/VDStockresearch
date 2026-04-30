@@ -22,6 +22,12 @@ from stock_platform.data.providers.institutional_holdings import (
     get_mutualfund_holders,
     holdings_summary,
 )
+from stock_platform.data.providers.kite_provider import (
+    KiteProvider,
+    KiteProviderError,
+    KiteSecurityError,
+)
+from stock_platform.data.providers.market_data_provider import MarketDataProvider
 from stock_platform.data.providers.nse import (
     fetch_bulk_deals,
     fetch_deals_for_symbol,
@@ -35,6 +41,10 @@ __all__ = [
     "CsvBankingFundamentalsProvider",
     "BANKING_FUNDAMENTAL_COLUMNS",
     "FundamentalsDataProvider",
+    "KiteProvider",
+    "KiteProviderError",
+    "KiteSecurityError",
+    "MarketDataProvider",
     "PriceDataProvider",
     "YahooFinanceProvider",
     "YFinanceFundamentalsProvider",

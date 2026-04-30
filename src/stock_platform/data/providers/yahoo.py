@@ -84,5 +84,28 @@ class YahooFinanceProvider(PriceDataProvider):
             )
             df = df.loc[~incomplete_rows].copy()
 
+        df["source"] = self.name
+        df["symbol"] = symbol
+        df.attrs["source"] = self.name
+        df.attrs["provider_label"] = "yfinance fallback"
         log.info("yfinance: got {} rows for {}", len(df), symbol)
         return df
+
+    def connection_test(self) -> dict[str, object]:
+        """Low-risk check that yfinance can return a recent price row."""
+        try:
+            frame = self.get_ohlcv(
+                "RELIANCE.NS",
+                start=date.today().replace(year=date.today().year - 1),
+                end=date.today(),
+            )
+            return {
+                "ok": not frame.empty,
+                "message": "yfinance connection is working"
+                if not frame.empty
+                else "No rows returned",
+                "provider": self.name,
+            }
+        except Exception:
+            log.warning("yfinance connection test failed")
+            return {"ok": False, "message": "yfinance connection failed", "provider": self.name}
