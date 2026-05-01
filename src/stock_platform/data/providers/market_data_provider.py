@@ -11,6 +11,7 @@ from typing import Any
 
 import pandas as pd
 
+from stock_platform.auth import load_kite_access_token
 from stock_platform.config import get_settings
 from stock_platform.data.providers.kite_provider import KiteProvider
 from stock_platform.data.providers.yahoo import YahooFinanceProvider
@@ -40,7 +41,7 @@ class MarketDataProvider:
         self.kite = kite_provider or KiteProvider(
             api_key=settings.kite_api_key,
             api_secret=settings.kite_api_secret,
-            access_token=settings.kite_access_token,
+            access_token=load_kite_access_token() or "",
         )
         self.yfinance = yfinance_provider or YahooFinanceProvider()
         self.last_source = ""

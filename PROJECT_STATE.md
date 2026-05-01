@@ -6,7 +6,7 @@
 
 ## Current phase
 
-**Phase 8 - Product UX, scanner, research workflow, and safe broker-auth foundation** *(MVP verified)*
+**Phase 9 - Multi-page research workspace and data-health foundation** *(in progress)*
 
 ---
 
@@ -314,6 +314,7 @@
 - [x] Product UX/design pass added: cleaner sidebar navigation, research guardrails, interactive chart controls, and hover definitions for technical terms
 - [x] Zerodha Kite Connect market-data foundation added: Kite-preferred router, yfinance fallback, instrument metadata, LTP/OHLC/quote methods, historical candles, and safe auth setup
 - [x] Zerodha API Setup moved to a directly reachable standalone section in the Streamlit UI
+- [x] Priority 1 multi-page Streamlit split started: Market Today, Stock Research, Top Opportunities, Watchlist, Backtests, Data Health, and Settings pages
 - [ ] Initial commit pushed to private GitHub repo
 
 ---
@@ -432,7 +433,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\backup_local.ps1
 
 ## Next planned task
 
-Manually configure Kite credentials, generate a fresh access token, test RELIANCE LTP/candles, then sync Kite NSE instruments locally.
+Verify the new multi-page Streamlit navigation manually in the browser, then continue shrinking duplicated/legacy page logic into shared components.
 
 ---
 
@@ -493,4 +494,16 @@ Manually configure Kite credentials, generate a fresh access token, test RELIANC
   - `ruff format --check src\stock_platform\ui\streamlit_app.py` passed.
   - `ruff check src\stock_platform\ui\streamlit_app.py` passed.
   - Streamlit AppTest passed with 0 exceptions and 0 rendered errors.
+  - Localhost returned HTTP 200 at `http://localhost:8501`.
+- **Priority 1 multi-page UI split completed (2026-05-02)**:
+  - `src/stock_platform/ui/streamlit_app.py` is now a small Streamlit navigation shell instead of a single long-scroll app.
+  - Added page files under `src/stock_platform/ui/pages/`: Market Today, Stock Research, Top Opportunities, Watchlist, Backtests, Data Health, and Settings.
+  - Added shared UI components under `src/stock_platform/ui/components/` for layout, formatting/helpers, stock loading context, and the cleaner price chart.
+  - Market Today is now the default home page and focuses on provider/data freshness, daily brief, saved scans, and persisted conviction scores.
+  - Zerodha API Setup moved to Settings, away from the research scroll.
+  - Stock Research now defaults back to the configured starter symbol instead of the first alphabetic universe symbol.
+  - `ruff check src\stock_platform\ui\streamlit_app.py src\stock_platform\ui\components src\stock_platform\ui\pages` passed.
+  - Streamlit router AppTest passed with 0 exceptions and 0 rendered errors.
+  - Each new page file passed Streamlit AppTest with 0 exceptions and 0 rendered errors.
+  - Focused tests passed: 44 tests passed across Kite provider, market-data router, data-health report, and repositories.
   - Localhost returned HTTP 200 at `http://localhost:8501`.

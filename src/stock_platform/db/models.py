@@ -226,6 +226,160 @@ class CorporateAction(Base):
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class InstrumentMaster(Base):
+    """Cached broker/exchange instrument metadata for symbol-token mapping."""
+
+    __tablename__ = "instrument_master"
+    __table_args__ = (
+        UniqueConstraint(
+            "exchange",
+            "tradingsymbol",
+            "segment",
+            "instrument_type",
+            name="uq_instrument_master_symbol",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    instrument_token: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    exchange_token: Mapped[int | None] = mapped_column(Integer)
+    tradingsymbol: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    name: Mapped[str | None] = mapped_column(String(255))
+    exchange: Mapped[str] = mapped_column(String(16), index=True, nullable=False, default="NSE")
+    segment: Mapped[str | None] = mapped_column(String(32))
+    instrument_type: Mapped[str | None] = mapped_column(String(32))
+    tick_size: Mapped[float | None] = mapped_column(Float)
+    lot_size: Mapped[int | None] = mapped_column(Integer)
+    expiry: Mapped[date | None] = mapped_column(Date)
+    strike: Mapped[float | None] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String(80), nullable=False, default="kite")
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class PriceDaily(Base):
+    """Validated daily OHLCV bars used by the research and backtesting layers."""
+
+    __tablename__ = "price_daily"
+    __table_args__ = (
+        UniqueConstraint("symbol", "trade_date", "source", name="uq_price_daily_symbol_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    trade_date: Mapped[date] = mapped_column(Date, index=True, nullable=False)
+    open: Mapped[float] = mapped_column(Float, nullable=False)
+    high: Mapped[float] = mapped_column(Float, nullable=False)
+    low: Mapped[float] = mapped_column(Float, nullable=False)
+    close: Mapped[float] = mapped_column(Float, nullable=False)
+    volume: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    source: Mapped[str] = mapped_column(String(80), nullable=False, default="kite")
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class TechnicalSnapshot(Base):
+    """Daily technical indicator snapshot derived from validated OHLCV bars."""
+
+    __tablename__ = "technical_snapshots"
+    __table_args__ = (
+        UniqueConstraint(
+            "symbol",
+            "as_of_date",
+            "source",
+            name="uq_technical_snapshot_symbol_date",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    as_of_date: Mapped[date] = mapped_column(Date, index=True, nullable=False)
+    close: Mapped[float | None] = mapped_column(Float)
+    rsi_14: Mapped[float | None] = mapped_column(Float)
+    macd: Mapped[float | None] = mapped_column(Float)
+    macd_signal: Mapped[float | None] = mapped_column(Float)
+    macd_hist: Mapped[float | None] = mapped_column(Float)
+    atr_14: Mapped[float | None] = mapped_column(Float)
+    atr_pct: Mapped[float | None] = mapped_column(Float)
+    relative_volume: Mapped[float | None] = mapped_column(Float)
+    sma_20: Mapped[float | None] = mapped_column(Float)
+    sma_50: Mapped[float | None] = mapped_column(Float)
+    sma_100: Mapped[float | None] = mapped_column(Float)
+    sma_200: Mapped[float | None] = mapped_column(Float)
+    ema_20: Mapped[float | None] = mapped_column(Float)
+    ema_50: Mapped[float | None] = mapped_column(Float)
+    ema_100: Mapped[float | None] = mapped_column(Float)
+    ema_200: Mapped[float | None] = mapped_column(Float)
+    ma_stack_status: Mapped[str | None] = mapped_column(String(40))
+    source: Mapped[str] = mapped_column(String(80), nullable=False, default="kite")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class DailyRefreshRun(Base):
+    """Audit row for one local daily refresh command run."""
+
+    __tablename__ = "daily_refresh_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    universe_name: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
+    requested_symbols: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    successful_symbols: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_symbols: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    price_rows_upserted: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    technical_rows_upserted: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    signal_rows_saved: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    instrument_rows_upserted: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    scan_run_id: Mapped[int | None] = mapped_column(ForeignKey("universe_scan_runs.id"))
+    source: Mapped[str] = mapped_column(String(80), nullable=False, default="kite")
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="started")
+    note: Mapped[str | None] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    duration_seconds: Mapped[float | None] = mapped_column(Float)
+
+
+class CompositeScoreSnapshot(Base):
+    """Daily composite-score snapshot per symbol.
+
+    The score is recomputed from the persisted (split-adjusted) indicator
+    history during each EOD refresh and upserted here so the platform builds
+    a real multi-day score series — used later for score-delta alerts and
+    weight backtests.
+    """
+
+    __tablename__ = "composite_scores"
+    __table_args__ = (
+        UniqueConstraint(
+            "symbol",
+            "as_of_date",
+            "source",
+            name="uq_composite_score_symbol_date",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    as_of_date: Mapped[date] = mapped_column(Date, index=True, nullable=False)
+    score: Mapped[float | None] = mapped_column(Float)
+    band: Mapped[str | None] = mapped_column(String(40))
+    fundamentals_score: Mapped[float | None] = mapped_column(Float)
+    technicals_score: Mapped[float | None] = mapped_column(Float)
+    flows_score: Mapped[float | None] = mapped_column(Float)
+    events_quality_score: Mapped[float | None] = mapped_column(Float)
+    macro_sector_score: Mapped[float | None] = mapped_column(Float)
+    active_signal_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    active_signals_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    reasons_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    risks_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    missing_data_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    source: Mapped[str] = mapped_column(String(80), nullable=False, default="kite")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+    )
+
+
 class SignalAudit(Base):
     """Audit trail for every observed technical signal scan."""
 

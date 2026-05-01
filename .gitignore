@@ -6,6 +6,7 @@
 *.key
 credentials.json
 secrets/
+data/secure/
 
 # ---- Python ----
 __pycache__/
