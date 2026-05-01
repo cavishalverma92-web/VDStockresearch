@@ -514,3 +514,9 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
   - Existing unversioned local SQLite databases are safely stamped on first rollout after ensuring current tables exist.
   - In-memory test databases still use fast SQLAlchemy table creation.
   - Added beginner documentation at `docs/ALEMBIC_MIGRATIONS.md`.
+- **Market Today dashboard upgrade completed (2026-05-02)**:
+  - Added `src/stock_platform/ops/market_today.py` to assemble homepage data from persisted local tables.
+  - Market Today now shows provider health, persisted breadth, Research Conviction score movers, top attention rows, upcoming event risk, stale symbols, and Kite token expiry status.
+  - Live index LTP remains an optional button and does not block the saved-data dashboard.
+  - Added tests in `tests/test_market_today.py`.
+  - Validation: targeted Ruff passed, 36 focused tests passed, Market Today AppTest passed with 0 exceptions and 0 errors, router AppTest passed with 0 exceptions and 0 errors.

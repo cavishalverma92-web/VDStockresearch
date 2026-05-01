@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
-from sqlalchemy import desc, select
-from sqlalchemy.orm import Session
 
 from stock_platform.analytics.scanner import (
     build_daily_research_brief,
@@ -15,9 +13,7 @@ from stock_platform.analytics.scanner import (
     list_available_universes,
 )
 from stock_platform.data.providers import MarketDataProvider
-from stock_platform.db import create_all_tables, get_engine
-from stock_platform.db.models import CompositeScoreSnapshot
-from stock_platform.ops import build_data_health_report
+from stock_platform.ops import build_market_today_summary
 from stock_platform.ui.components.common import research_pick_button, universe_label
 from stock_platform.ui.components.layout import render_page_shell
 
@@ -26,51 +22,126 @@ render_page_shell(
     "A focused morning dashboard: data freshness, provider health, score movers, and attention queue.",
 )
 
-health = build_data_health_report()
+summary = build_market_today_summary()
+health = summary.health
 latest_run = health.recent_refresh_runs[0] if health.recent_refresh_runs else None
+breadth = summary.breadth
+token = summary.kite_token
 
-top_cols = st.columns(4)
-top_cols[0].metric("Provider health", latest_run.status.title() if latest_run else "No refresh")
+st.markdown("#### Morning Control Panel")
+top_cols = st.columns(5)
+top_cols[0].metric(
+    "Provider health",
+    summary.provider_health.label,
+    help=summary.provider_health.detail,
+)
 top_cols[1].metric(
-    "Latest refresh",
-    f"#{latest_run.run_id}" if latest_run else "None",
-    help="Green/amber/red logic will become stricter once daily refreshes are scheduled.",
+    "Breadth",
+    f"{breadth.advances} / {breadth.declines}",
+    help="Advances / declines from the latest two persisted daily closes per symbol.",
 )
 top_cols[2].metric(
-    "Persisted price rows",
-    f"{health.price_coverage.total_rows:,}" if health.price_coverage else "0",
+    "A/D ratio",
+    "N/A" if breadth.advance_decline_ratio is None else f"{breadth.advance_decline_ratio:.2f}",
+    help="Advance-decline ratio from persisted prices.",
 )
 top_cols[3].metric(
+    "Score rows",
+    f"{health.composite_score_coverage.total_rows:,}" if health.composite_score_coverage else "0",
+    help="Persisted Research Conviction snapshots available locally.",
+)
+top_cols[4].metric(
     "Kite token",
-    "Configured" if health.kite_token.configured else "Missing",
-    help="Kite token usually needs a fresh login each trading day.",
+    token.status.title(),
+    help=token.message,
 )
 
-if health.stale_symbols:
-    st.warning(
-        f"{len(health.stale_symbols)} persisted symbol(s) are stale at the "
-        f"{health.stale_threshold_days}-day threshold. Open Data Health for details."
-    )
+if summary.provider_health.color == "green":
+    st.success(summary.provider_health.detail)
+elif summary.provider_health.color == "amber":
+    st.warning(summary.provider_health.detail)
 else:
-    st.success("No stale persisted symbols at the current threshold.")
+    st.error(summary.provider_health.detail)
 
-st.subheader("Market Snapshot")
-if st.button("Refresh live index snapshot"):
-    provider = MarketDataProvider()
-    try:
-        snapshot = provider.get_ltp(["NIFTY 50", "NIFTY BANK", "NIFTY MIDCAP 100"])
-    except Exception as exc:  # noqa: BLE001
-        snapshot = pd.DataFrame()
-        st.warning(f"Live index snapshot unavailable: {type(exc).__name__}")
-    if snapshot.empty:
-        st.info("No live index rows returned. This can happen if Kite index symbols differ.")
-    else:
-        safe_cols = [col for col in ["symbol", "exchange", "ltp", "source"] if col in snapshot]
-        st.dataframe(snapshot[safe_cols], width="stretch", hide_index=True)
+if token.status in {"missing", "expired", "warning"}:
+    st.warning(token.message)
 else:
+    st.info(token.message)
+
+if breadth.latest_trade_date:
     st.caption(
-        "Click once when you want a fresh Kite LTP check. The rest of this page uses saved data."
+        f"Breadth uses {breadth.compared_symbols} symbol(s), latest saved bar "
+        f"{breadth.latest_trade_date}."
     )
+else:
+    st.caption("Breadth will appear after the first EOD refresh stores local price rows.")
+
+st.divider()
+
+snapshot_col, stale_col = st.columns([2, 1])
+with snapshot_col:
+    st.subheader("Top Attention List")
+    st.caption("Highest persisted Research Conviction rows from the latest saved score date.")
+    if summary.top_attention.empty:
+        st.info("No persisted score rows yet. Run the EOD refresh job to populate this.")
+    else:
+        research_pick_button(summary.top_attention, key="market_attention")
+
+with stale_col:
+    st.subheader("Data Freshness")
+    if summary.stale_symbols.empty:
+        st.success("No stale persisted symbols at the current threshold.")
+    else:
+        st.warning(f"{len(summary.stale_symbols)} stale symbol(s) need refresh.")
+        st.dataframe(summary.stale_symbols, width="stretch", hide_index=True)
+
+st.subheader("Score Movers")
+st.caption("Largest positive or negative movement between each symbol's latest two saved scores.")
+if summary.score_movers.empty:
+    st.info("Score movers need at least two persisted score dates per symbol.")
+else:
+    positive = summary.score_movers[summary.score_movers["score_change"] > 0]
+    negative = summary.score_movers[summary.score_movers["score_change"] < 0]
+    tab_up, tab_down, tab_all = st.tabs(["Improving", "Weakening", "All movers"])
+    with tab_up:
+        if positive.empty:
+            st.info("No improving score movers in the saved data yet.")
+        else:
+            research_pick_button(positive, key="market_score_up")
+    with tab_down:
+        if negative.empty:
+            st.info("No weakening score movers in the saved data yet.")
+        else:
+            research_pick_button(negative, key="market_score_down")
+    with tab_all:
+        research_pick_button(summary.score_movers, key="market_score_all")
+
+event_col, live_col = st.columns([2, 1])
+with event_col:
+    st.subheader("Upcoming Event Risk")
+    st.caption("Corporate actions or result-style events saved locally in the next 5 trading days.")
+    if summary.upcoming_events.empty:
+        st.info("No saved upcoming events in the next 5 trading days.")
+    else:
+        research_pick_button(summary.upcoming_events, key="market_events")
+
+with live_col:
+    st.subheader("Live Index Check")
+    st.caption("Optional. Uses provider router; saved dashboard data above does not need this.")
+    if st.button("Refresh live index snapshot"):
+        provider = MarketDataProvider()
+        try:
+            snapshot = provider.get_ltp(["NIFTY 50", "NIFTY BANK", "NIFTY MIDCAP 100"])
+        except Exception as exc:  # noqa: BLE001
+            snapshot = pd.DataFrame()
+            st.warning(f"Live index snapshot unavailable: {type(exc).__name__}")
+        if snapshot.empty:
+            st.info("No live index rows returned. Kite index symbol names may differ.")
+        else:
+            safe_cols = [col for col in ["symbol", "exchange", "ltp", "source"] if col in snapshot]
+            st.dataframe(snapshot[safe_cols], width="stretch", hide_index=True)
+
+st.divider()
 
 st.subheader("Daily Research Brief")
 universes = list_available_universes()
@@ -127,30 +198,8 @@ else:
             else:
                 st.dataframe(action_frame, width="stretch", hide_index=True)
 
-st.subheader("Top Persisted Research Conviction")
-engine = get_engine()
-create_all_tables(engine)
-with Session(engine) as session:
-    rows = session.scalars(
-        select(CompositeScoreSnapshot)
-        .order_by(desc(CompositeScoreSnapshot.as_of_date), desc(CompositeScoreSnapshot.score))
-        .limit(10)
-    ).all()
-
-if not rows:
-    st.info("No persisted composite scores yet. Run the EOD refresh job to populate this.")
-else:
-    top_frame = pd.DataFrame(
-        [
-            {
-                "symbol": row.symbol,
-                "as_of_date": row.as_of_date,
-                "score": row.score,
-                "band": row.band,
-                "signals": row.active_signal_count,
-                "source": row.source,
-            }
-            for row in rows
-        ]
+if latest_run:
+    st.caption(
+        f"Last refresh #{latest_run.run_id}: {latest_run.status}, "
+        f"{latest_run.successful_symbols} successful, {latest_run.failed_symbols} failed."
     )
-    research_pick_button(top_frame, key="market_top_scores")
