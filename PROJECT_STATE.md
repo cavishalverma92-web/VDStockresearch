@@ -507,3 +507,10 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
   - Each new page file passed Streamlit AppTest with 0 exceptions and 0 rendered errors.
   - Focused tests passed: 44 tests passed across Kite provider, market-data router, data-health report, and repositories.
   - Localhost returned HTTP 200 at `http://localhost:8501`.
+- **Alembic migration foundation completed (2026-05-02)**:
+  - Added Alembic config, environment, and a baseline schema migration under `alembic/`.
+  - Added migration helpers in `src/stock_platform/db/migrations.py`.
+  - Real file databases now run `alembic upgrade head` through `create_all_tables()`.
+  - Existing unversioned local SQLite databases are safely stamped on first rollout after ensuring current tables exist.
+  - In-memory test databases still use fast SQLAlchemy table creation.
+  - Added beginner documentation at `docs/ALEMBIC_MIGRATIONS.md`.
