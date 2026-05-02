@@ -520,3 +520,9 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
   - Live index LTP remains an optional button and does not block the saved-data dashboard.
   - Added tests in `tests/test_market_today.py`.
   - Validation: targeted Ruff passed, 36 focused tests passed, Market Today AppTest passed with 0 exceptions and 0 errors, router AppTest passed with 0 exceptions and 0 errors.
+- **Manual daily refresh controls completed (2026-05-02)**:
+  - Added a safe Run Daily EOD Refresh form to the Data Health page.
+  - The form supports dry runs, small max-symbol test runs, backfill-window controls, overlap days, and a run note.
+  - Added `scripts/run_daily_refresh.ps1` for command-line and Windows Task Scheduler usage.
+  - Added beginner documentation at `docs/DAILY_REFRESH.md`.
+  - Refresh remains market-data only; no portfolio, holdings, funds, orders, or trading APIs are used.
