@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from stock_platform.auth import load_kite_access_token
+from stock_platform.auth import clear_kite_access_token, load_kite_access_token
 from stock_platform.config import ROOT_DIR, get_settings
 from stock_platform.data.providers import KiteProvider, KiteProviderError
 from stock_platform.ops import run_health_checks
@@ -37,6 +37,23 @@ flag_cols[0].metric(
 )
 flag_cols[1].metric("Kite trading", "Disabled")
 flag_cols[2].metric("Kite portfolio", "Disabled")
+
+if token.strip():
+    st.info(
+        "If Kite tests say the token is incorrect or expired, clear the saved token, "
+        "generate a fresh login URL, and create a new access token. Kite access tokens "
+        "usually need to be renewed frequently."
+    )
+
+if st.button("Clear saved Kite token"):
+    removed = clear_kite_access_token()
+    if removed:
+        st.success("Saved Kite token cleared from the local secure store. Generate a fresh one.")
+    else:
+        st.info(
+            "No secure-store token file was found. If KITE_ACCESS_TOKEN is still in .env, "
+            "remove or replace it there manually."
+        )
 
 if st.button("Generate Zerodha Login URL"):
     try:
@@ -92,6 +109,8 @@ with test_cols[1]:
                 width="stretch",
                 hide_index=True,
             )
+        except KiteProviderError as exc:
+            st.warning(str(exc))
         except Exception as exc:  # noqa: BLE001
             st.warning(f"LTP test failed: {type(exc).__name__}")
 with test_cols[2]:
@@ -105,6 +124,8 @@ with test_cols[2]:
                 to_date=date.today(),
             )
             st.success(f"Kite returned {len(frame):,} candle rows.")
+        except KiteProviderError as exc:
+            st.warning(str(exc))
         except Exception as exc:  # noqa: BLE001
             st.warning(f"Candle test failed: {type(exc).__name__}")
 

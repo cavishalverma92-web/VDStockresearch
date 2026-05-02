@@ -4,7 +4,11 @@ import pandas as pd
 import pytest
 
 from stock_platform.data.providers import kite_provider
-from stock_platform.data.providers.kite_provider import KiteProvider, KiteSecurityError
+from stock_platform.data.providers.kite_provider import (
+    KiteProvider,
+    KiteProviderError,
+    KiteSecurityError,
+)
 
 
 class _FakeKiteConnect:
@@ -62,6 +66,20 @@ class _FakeKiteConnect:
         ]
 
 
+class _TokenError(Exception):
+    pass
+
+
+class _FakeKiteConnectWithBadToken(_FakeKiteConnect):
+    def ltp(self, symbols: list[str]) -> dict[str, dict[str, float]]:
+        raise _TokenError("Incorrect `api_key` or `access_token`.")
+
+    def historical_data(
+        self, instrument_token: int, from_date, to_date, interval: str
+    ) -> list[dict[str, object]]:
+        raise _TokenError("Incorrect `api_key` or `access_token`.")
+
+
 def test_missing_credentials_returns_not_configured() -> None:
     provider = KiteProvider(api_key="", api_secret="")
 
@@ -109,6 +127,33 @@ def test_connection_test_returns_only_safe_status(monkeypatch) -> None:
         "message": "Zerodha market-data connection is working",
         "provider": "kite",
     }
+
+
+def test_connection_test_explains_bad_token_without_exposing_it(monkeypatch) -> None:
+    monkeypatch.setattr(kite_provider, "KiteConnect", _FakeKiteConnectWithBadToken)
+    provider = KiteProvider(
+        api_key="test_key",
+        api_secret="test_secret",
+        access_token="secret_access_token",
+    )
+
+    result = provider.connection_test()
+
+    assert result["ok"] is False
+    assert "Regenerate the token" in result["message"]
+    assert "secret_access_token" not in result["message"]
+
+
+def test_ltp_bad_token_raises_beginner_friendly_error(monkeypatch) -> None:
+    monkeypatch.setattr(kite_provider, "KiteConnect", _FakeKiteConnectWithBadToken)
+    provider = KiteProvider(
+        api_key="test_key",
+        api_secret="test_secret",
+        access_token="secret_access_token",
+    )
+
+    with pytest.raises(KiteProviderError, match="Regenerate the token"):
+        provider.get_ltp(["RELIANCE"])
 
 
 def test_historical_candles_normalize_expected_columns(monkeypatch) -> None:

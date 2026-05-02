@@ -533,3 +533,9 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
   - Persisted 6,175 price rows, 6,110 technical rows, and 5 Research Conviction score rows.
   - Kite historical candles returned TokenException, so the provider router correctly used yfinance fallback.
   - Market Today now has persisted breadth and 5 top-attention rows from local data.
+- **Kite token diagnostic and UX hardening completed (2026-05-03)**:
+  - Safe market-data diagnostic confirmed API key, API secret, and access token are present.
+  - Kite instrument lookup works, but LTP and historical candles are rejected with an incorrect API key/access token error.
+  - Improved Kite error handling to show a beginner-readable regenerate-token message without exposing secrets.
+  - Added a Settings button to clear the saved local Kite token before regenerating.
+  - No portfolio, holdings, funds, order, trade, or profile APIs were added or called.

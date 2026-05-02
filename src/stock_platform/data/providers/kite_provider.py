@@ -63,6 +63,26 @@ def _mask(value: str | None) -> str:
     return f"{cleaned[:4]}...{cleaned[-4:]}"
 
 
+def _kite_market_data_error(exc: Exception) -> str:
+    """Return a safe, beginner-readable Kite market-data error."""
+    error_type = type(exc).__name__
+    error_text = str(exc)
+    if error_type == "TokenException" or "access_token" in error_text.lower():
+        return (
+            "Zerodha rejected the access token. Regenerate the token in Settings and "
+            "make sure it was created for the same KITE_API_KEY."
+        )
+    if "permission" in error_text.lower() or "subscription" in error_text.lower():
+        return (
+            "Zerodha market data permission may be unavailable for this app. Check your "
+            "Kite Connect app subscription and permissions."
+        )
+    return (
+        "Zerodha market-data request failed. Check token freshness, Kite Connect "
+        "subscription, and instrument availability."
+    )
+
+
 def kite_trading_symbol(symbol: str) -> str:
     """Convert app symbols like RELIANCE.NS into Kite trading symbols like RELIANCE."""
     cleaned = _clean(symbol).upper()
@@ -222,11 +242,18 @@ class KiteProvider:
                 "message": "Zerodha market-data test returned no LTP rows.",
                 "provider": self.name,
             }
+        except KiteProviderError as exc:
+            log.warning("Kite market-data connection test failed: KiteProviderError")
+            return {
+                "ok": False,
+                "message": str(exc),
+                "provider": self.name,
+            }
         except Exception as exc:
             log.warning("Kite market-data connection test failed: {}", type(exc).__name__)
             return {
                 "ok": False,
-                "message": "Zerodha market-data connection failed. Regenerate token or check credentials.",
+                "message": _kite_market_data_error(exc),
                 "provider": self.name,
             }
 
@@ -308,10 +335,7 @@ class KiteProvider:
             )
         except Exception as exc:
             log.warning("Kite historical candles failed: {}", type(exc).__name__)
-            raise KiteProviderError(
-                "Could not fetch Zerodha historical candles. Check access token, "
-                "instrument token, date range, and Kite Connect subscription."
-            ) from exc
+            raise KiteProviderError(_kite_market_data_error(exc)) from exc
 
         frame = pd.DataFrame(candles)
         expected = ["date", "open", "high", "low", "close", "volume"]
@@ -339,7 +363,11 @@ class KiteProvider:
         """Fetch last traded price for symbols."""
         keys = [kite_symbol_key(symbol, exchange) for symbol in symbols]
         log.info("Kite LTP requested: count={}, exchange={}", len(keys), exchange)
-        raw = self._authenticated_client().ltp(keys)
+        try:
+            raw = self._authenticated_client().ltp(keys)
+        except Exception as exc:
+            log.warning("Kite LTP failed: {}", type(exc).__name__)
+            raise KiteProviderError(_kite_market_data_error(exc)) from exc
         rows = []
         for key, payload in (raw or {}).items():
             exch, trading_symbol = key.split(":", 1)
@@ -361,7 +389,11 @@ class KiteProvider:
         """Fetch OHLC quote snapshot for symbols."""
         keys = [kite_symbol_key(symbol, exchange) for symbol in symbols]
         log.info("Kite OHLC requested: count={}, exchange={}", len(keys), exchange)
-        raw = self._authenticated_client().ohlc(keys)
+        try:
+            raw = self._authenticated_client().ohlc(keys)
+        except Exception as exc:
+            log.warning("Kite OHLC failed: {}", type(exc).__name__)
+            raise KiteProviderError(_kite_market_data_error(exc)) from exc
         rows = []
         for key, payload in (raw or {}).items():
             exch, trading_symbol = key.split(":", 1)
@@ -386,7 +418,11 @@ class KiteProvider:
         """Fetch quote snapshot for symbols."""
         keys = [kite_symbol_key(symbol, exchange) for symbol in symbols]
         log.info("Kite quote requested: count={}, exchange={}", len(keys), exchange)
-        raw = self._authenticated_client().quote(keys)
+        try:
+            raw = self._authenticated_client().quote(keys)
+        except Exception as exc:
+            log.warning("Kite quote failed: {}", type(exc).__name__)
+            raise KiteProviderError(_kite_market_data_error(exc)) from exc
         rows = []
         for key, payload in (raw or {}).items():
             exch, trading_symbol = key.split(":", 1)
