@@ -558,3 +558,12 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
   - Local data health summary after refresh: 68,757 total price rows; source mix `kite: 62,582`, `yfinance: 6,175`.
   - Market Today summary reads the latest run as completed, with breadth from the 2026-04-30 latest trade date and 5 top-attention rows.
   - Streamlit router AppTest passed with 0 exceptions and 0 rendered errors.
+- **Official NSE universe updater completed (2026-05-03)**:
+  - Added `NseIndexProvider` for official NSE index constituent CSV files.
+  - Added `refresh_official_universes` job and `scripts/update_nse_index_universe.ps1`.
+  - Added documentation at `docs/OFFICIAL_UNIVERSE_REFRESH.md`.
+  - The job supports dry-run by default and only edits `config/universes.yaml` when `--apply` / `-Apply` is used.
+  - Ran the updater against official NSE Nifty 50: 50 official rows, no symbols added, no symbols removed.
+  - Applied the official NSE row ordering, then verified a second dry-run reports `Config would change: False`.
+  - Focused tests passed: 20 tests passed across NSE index parsing, official universe refresh, and universe scanner.
+  - Targeted Ruff checks passed for the new provider, job, and tests.
