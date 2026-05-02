@@ -539,3 +539,9 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
   - Improved Kite error handling to show a beginner-readable regenerate-token message without exposing secrets.
   - Added a Settings button to clear the saved local Kite token before regenerating.
   - No portfolio, holdings, funds, order, trade, or profile APIs were added or called.
+- **First Kite-backed 5-symbol refresh completed (2026-05-03)**:
+  - After token regeneration, Kite LTP and RELIANCE historical candles tested successfully.
+  - Initial Kite refresh exposed duplicate-date technical snapshot handling when yfinance and Kite rows coexist.
+  - Fixed technical snapshot upsert to deduplicate incoming dates before insert/update.
+  - Reran 5-symbol refresh successfully as run #3: 5 successful, 0 failed, 20 Kite price rows, 20 Kite technical rows, and 5 Kite score rows.
+  - Current local source mix: yfinance historical backfill plus Kite recent bars.

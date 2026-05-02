@@ -81,6 +81,7 @@ def upsert_technical_snapshots(
     working = working[~working.index.isna()].copy()
     working.index = pd.DatetimeIndex(working.index).tz_localize(None).normalize()
     working.index = pd.Index([ts.date() for ts in working.index], name="as_of_date")
+    working = working[~working.index.duplicated(keep="last")]
 
     if only_after is not None:
         working = working[working.index >= only_after]

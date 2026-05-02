@@ -332,6 +332,30 @@ def test_upsert_technical_snapshots_updates_existing(engine) -> None:
     assert summary.updated == 2
 
 
+def test_upsert_technical_snapshots_deduplicates_incoming_dates(engine) -> None:
+    idx = pd.to_datetime(["2026-04-27", "2026-04-27"])
+    frame = pd.DataFrame(
+        {
+            "close": [100.0, 101.0],
+            "rsi_14": [50.0, 51.0],
+            "macd": [1.0, 1.1],
+        },
+        index=idx,
+    )
+
+    with Session(engine) as session:
+        summary = upsert_technical_snapshots(session, "RELIANCE.NS", frame, source="kite")
+        session.commit()
+
+    assert summary.inserted == 1
+    assert summary.updated == 0
+    with Session(engine) as session:
+        rows = session.query(TechnicalSnapshot).all()
+        assert len(rows) == 1
+        assert rows[0].close == 101.0
+        assert rows[0].rsi_14 == 51.0
+
+
 # ---------------------------------------------------------------------------
 # Corporate actions
 # ---------------------------------------------------------------------------
