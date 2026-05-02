@@ -545,3 +545,16 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
   - Fixed technical snapshot upsert to deduplicate incoming dates before insert/update.
   - Reran 5-symbol refresh successfully as run #3: 5 successful, 0 failed, 20 Kite price rows, 20 Kite technical rows, and 5 Kite score rows.
   - Current local source mix: yfinance historical backfill plus Kite recent bars.
+- **Official Nifty 50 universe refresh completed (2026-05-03)**:
+  - Pulled the official NSE Nifty 50 CSV from `https://archives.nseindia.com/content/indices/ind_nifty50list.csv`.
+  - Updated `config/universes.yaml` so the `nifty_50` seed list matches the official NSE symbols.
+  - Replaced stale/removed entries such as `TATAMOTORS.NS` and `LTIM.NS` with current official symbols including `TMPV.NS`, `ETERNAL.NS`, `JIOFIN.NS`, `BEL.NS`, `INDIGO.NS`, `MAXHEALTH.NS`, and `TRENT.NS`.
+  - Verification: `load_universe("nifty_50")` returns exactly 50 symbols.
+  - Focused tests passed: 53 tests passed across universe scanner, daily refresh, and repositories.
+- **First full Kite-backed Nifty 50 refresh completed (2026-05-03)**:
+  - Ran `refresh_eod_candles --universe nifty_50` after updating the official NSE universe.
+  - Result: run #6 completed, 50 requested, 50 successful, 0 skipped, 0 failed.
+  - Persisted/updated 9,453 price rows, 9,349 technical snapshot rows, and 50 Research Conviction score rows from Kite.
+  - Local data health summary after refresh: 68,757 total price rows; source mix `kite: 62,582`, `yfinance: 6,175`.
+  - Market Today summary reads the latest run as completed, with breadth from the 2026-04-30 latest trade date and 5 top-attention rows.
+  - Streamlit router AppTest passed with 0 exceptions and 0 rendered errors.
