@@ -526,3 +526,10 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
   - Added `scripts/run_daily_refresh.ps1` for command-line and Windows Task Scheduler usage.
   - Added beginner documentation at `docs/DAILY_REFRESH.md`.
   - Refresh remains market-data only; no portfolio, holdings, funds, orders, or trading APIs are used.
+- **First real 5-symbol EOD refresh completed (2026-05-03)**:
+  - Ran `refresh_eod_candles --universe nifty_50 --max-symbols 5`.
+  - Processed RELIANCE.NS, TCS.NS, HDFCBANK.NS, ICICIBANK.NS, and INFY.NS.
+  - Result: run #1 completed, 5 successful, 0 failed.
+  - Persisted 6,175 price rows, 6,110 technical rows, and 5 Research Conviction score rows.
+  - Kite historical candles returned TokenException, so the provider router correctly used yfinance fallback.
+  - Market Today now has persisted breadth and 5 top-attention rows from local data.
