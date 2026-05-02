@@ -256,6 +256,39 @@ class InstrumentMaster(Base):
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class IndexMembershipHistory(Base):
+    """Point-in-time index membership periods for survivorship-aware backtests."""
+
+    __tablename__ = "index_membership_history"
+    __table_args__ = (
+        UniqueConstraint(
+            "index_name",
+            "symbol",
+            "from_date",
+            "source",
+            name="uq_index_membership_period",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    index_name: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
+    symbol: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    company_name: Mapped[str | None] = mapped_column(String(255))
+    industry: Mapped[str | None] = mapped_column(String(160))
+    isin: Mapped[str | None] = mapped_column(String(32))
+    from_date: Mapped[date] = mapped_column(Date, index=True, nullable=False)
+    to_date: Mapped[date | None] = mapped_column(Date, index=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    source: Mapped[str] = mapped_column(String(80), nullable=False, default="nse_index_csv")
+    source_url: Mapped[str | None] = mapped_column(Text)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+    )
+
+
 class PriceDaily(Base):
     """Validated daily OHLCV bars used by the research and backtesting layers."""
 

@@ -22,8 +22,10 @@ from datetime import date, timedelta
 from math import prod
 
 import pandas as pd
+from sqlalchemy.orm import Session
 
 from stock_platform.data.providers.yahoo import YahooFinanceProvider
+from stock_platform.data.repositories import was_index_member_on
 from stock_platform.utils.logging import get_backtest_logger
 
 log = get_backtest_logger(__name__)
@@ -87,6 +89,8 @@ def run_signal_backtest(
     events: pd.DataFrame,
     price_provider: YahooFinanceProvider | None = None,
     holding_days: int = 20,
+    membership_session: Session | None = None,
+    index_name: str | None = None,
 ) -> tuple[list[TradeResult], list[BacktestSummary]]:
     """Evaluate forward returns for saved signal events.
 
@@ -95,11 +99,20 @@ def run_signal_backtest(
                 columns: event_date, symbol, signal, active, close.
         price_provider: OHLCV provider. Defaults to ``YahooFinanceProvider()``.
         holding_days: Number of trading days to hold after the signal date.
+        membership_session: optional SQLAlchemy session used to filter events
+            by point-in-time index membership.
+        index_name: optional index name such as ``"Nifty 50"``. When provided
+            with ``membership_session``, events are only backtested if the
+            symbol belonged to that index on the event date.
 
     Returns:
         ``(trade_results, per_signal_summaries)``
     """
     if events is None or events.empty:
+        return [], []
+
+    events = _filter_events_by_membership(events, membership_session, index_name)
+    if events.empty:
         return [], []
 
     provider = price_provider or YahooFinanceProvider()
@@ -374,6 +387,28 @@ def portfolio_metrics_to_frame(metrics: PortfolioBacktestMetrics) -> pd.DataFram
             },
         ]
     )
+
+
+def _filter_events_by_membership(
+    events: pd.DataFrame,
+    membership_session: Session | None,
+    index_name: str | None,
+) -> pd.DataFrame:
+    """Return only events whose symbol belonged to ``index_name`` on event date."""
+    if membership_session is None or not index_name:
+        return events
+
+    keep: list[bool] = []
+    for _, row in events.iterrows():
+        keep.append(
+            was_index_member_on(
+                membership_session,
+                index_name=index_name,
+                symbol=str(row["symbol"]),
+                on_date=_as_date(row["event_date"]),
+            )
+        )
+    return events.loc[keep].reset_index(drop=True)
 
 
 def run_walk_forward_validation(

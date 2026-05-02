@@ -22,6 +22,12 @@ from stock_platform.data.repositories.instruments import (
     find_instrument_token,
     upsert_instruments,
 )
+from stock_platform.data.repositories.index_membership import (
+    IndexMembershipSyncSummary,
+    list_index_members_on,
+    sync_index_membership_snapshot,
+    was_index_member_on,
+)
 from stock_platform.data.repositories.price_daily import (
     PriceUpsertSummary,
     fetch_price_daily,
@@ -41,6 +47,7 @@ __all__ = [
     "CompositeScoreUpsertSummary",
     "CorporateActionUpsertSummary",
     "InstrumentUpsertSummary",
+    "IndexMembershipSyncSummary",
     "PriceUpsertSummary",
     "TechnicalUpsertSummary",
     "complete_refresh_run",
@@ -51,10 +58,13 @@ __all__ = [
     "find_instrument_token",
     "latest_composite_score",
     "latest_trade_date",
+    "list_index_members_on",
     "start_refresh_run",
+    "sync_index_membership_snapshot",
     "upsert_composite_score",
     "upsert_corporate_actions",
     "upsert_instruments",
     "upsert_price_daily",
     "upsert_technical_snapshots",
+    "was_index_member_on",
 ]

@@ -7,6 +7,8 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
 from stock_platform.analytics.backtest.signal_backtest import (
     BacktestSummary,
@@ -19,6 +21,8 @@ from stock_platform.analytics.backtest.signal_backtest import (
     summaries_to_frame,
     trades_to_frame,
 )
+from stock_platform.data.repositories.index_membership import sync_index_membership_snapshot
+from stock_platform.db.models import Base
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -167,6 +171,52 @@ def test_no_future_bars_gives_none_return():
     assert len(trades) == 1
     assert trades[0].return_pct is None
     assert trades[0].exit_price is None
+
+
+def test_signal_backtest_can_filter_by_point_in_time_index_membership():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    events = _make_events(
+        [
+            {
+                "symbol": "RELIANCE.NS",
+                "signal": "MA Stack",
+                "event_date": date(2026, 5, 3),
+                "active": True,
+                "close": 100.0,
+            },
+            {
+                "symbol": "OLD.NS",
+                "signal": "MA Stack",
+                "event_date": date(2026, 5, 3),
+                "active": True,
+                "close": 100.0,
+            },
+        ]
+    )
+    dates = pd.date_range(start="2026-05-03", periods=25, freq="B")
+    mock_provider = MagicMock()
+    mock_provider.get_ohlcv.return_value = _make_price_frame(dates, [100.0] + [105.0] * 24)
+
+    with Session(engine) as session:
+        sync_index_membership_snapshot(
+            session,
+            index_name="Nifty 50",
+            constituents=pd.DataFrame({"Symbol": ["RELIANCE"], "Series": ["EQ"]}),
+            effective_date=date(2026, 5, 3),
+        )
+        session.commit()
+
+        trades, summaries = run_signal_backtest(
+            events,
+            mock_provider,
+            holding_days=20,
+            membership_session=session,
+            index_name="Nifty 50",
+        )
+
+    assert [trade.symbol for trade in trades] == ["RELIANCE.NS"]
+    assert summaries[0].total_trades == 1
 
 
 # ---------------------------------------------------------------------------

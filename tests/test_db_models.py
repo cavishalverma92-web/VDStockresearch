@@ -7,7 +7,13 @@ from datetime import date
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from stock_platform.db.models import Base, FundamentalsAnnual, FundamentalsQuarterly, StockUniverse
+from stock_platform.db.models import (
+    Base,
+    FundamentalsAnnual,
+    FundamentalsQuarterly,
+    IndexMembershipHistory,
+    StockUniverse,
+)
 
 
 def test_stock_universe_and_fundamentals_tables_can_be_created() -> None:
@@ -76,3 +82,31 @@ def test_stock_universe_and_fundamentals_tables_can_be_created() -> None:
         assert len(stored.quarterly_fundamentals) == 1
         assert stored.annual_fundamentals[0].source == "sample"
         assert stored.annual_fundamentals[0].enterprise_value == 2_600
+
+
+def test_index_membership_history_table_can_be_created() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        row = IndexMembershipHistory(
+            index_name="Nifty 50",
+            symbol="RELIANCE.NS",
+            company_name="Reliance Industries Ltd.",
+            industry="Oil Gas & Consumable Fuels",
+            isin="INE002A01018",
+            from_date=date(2026, 5, 3),
+            source="nse_index_csv",
+            source_url="https://archives.nseindia.com/content/indices/ind_nifty50list.csv",
+        )
+        session.add(row)
+        session.commit()
+
+    with Session(engine) as session:
+        stored = session.scalar(
+            select(IndexMembershipHistory).where(IndexMembershipHistory.symbol == "RELIANCE.NS")
+        )
+        assert stored is not None
+        assert stored.index_name == "Nifty 50"
+        assert stored.active is True
+        assert stored.to_date is None

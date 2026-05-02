@@ -567,3 +567,13 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
   - Applied the official NSE row ordering, then verified a second dry-run reports `Config would change: False`.
   - Focused tests passed: 20 tests passed across NSE index parsing, official universe refresh, and universe scanner.
   - Targeted Ruff checks passed for the new provider, job, and tests.
+- **Index membership history foundation completed (2026-05-03)**:
+  - Added `index_membership_history` ORM model and Alembic migration.
+  - Added repository helpers to sync current membership snapshots, list members on a date, and test whether a symbol was an index member on a date.
+  - Added `refresh_index_membership` job and `scripts/refresh_index_membership.ps1`.
+  - Signal backtests can now optionally filter events by point-in-time index membership.
+  - Added documentation at `docs/INDEX_MEMBERSHIP_HISTORY.md`.
+  - Ran the current official NSE Nifty 50 snapshot with effective date `2026-05-03`.
+  - Local DB verification: 50 membership rows, 50 active rows, `RELIANCE.NS=True`, `LTIM.NS=False` for `2026-05-03`.
+  - Focused tests passed: 22 tests passed across index membership repository, signal backtest, database models, and migrations.
+  - Targeted Ruff checks and format checks passed.

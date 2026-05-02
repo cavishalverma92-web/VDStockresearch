@@ -18,6 +18,7 @@ def test_create_all_tables_uses_alembic_for_file_database(tmp_path) -> None:
     assert "stock_universe" in tables
     assert "price_daily" in tables
     assert "composite_scores" in tables
+    assert "index_membership_history" in tables
 
 
 def test_create_all_tables_keeps_fast_in_memory_path() -> None:
@@ -28,6 +29,7 @@ def test_create_all_tables_keeps_fast_in_memory_path() -> None:
     tables = set(inspect(engine).get_table_names())
     assert "alembic_version" not in tables
     assert "stock_universe" in tables
+    assert "index_membership_history" in tables
 
 
 def test_run_migrations_stamps_existing_unversioned_database(tmp_path) -> None:
