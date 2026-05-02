@@ -11,6 +11,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from stock_platform.data.repositories.composite_scores import upsert_composite_score
+from stock_platform.data.repositories.index_membership import sync_index_membership_snapshot
 from stock_platform.data.repositories.instruments import upsert_instruments
 from stock_platform.data.repositories.price_daily import upsert_price_daily
 from stock_platform.data.repositories.refresh_runs import (
@@ -30,7 +31,7 @@ def engine():
 
 
 @pytest.fixture
-def settings_stub(monkeypatch):
+def settings_stub(monkeypatch, tmp_path):
     """Isolate token-presence checks from the developer's real .env."""
     from stock_platform.auth import kite_token_store
     from stock_platform.ops import data_health
@@ -42,6 +43,7 @@ def settings_stub(monkeypatch):
     )
     monkeypatch.setattr(kite_token_store, "get_settings", lambda: stub)
     monkeypatch.setattr(data_health, "get_settings", lambda: stub)
+    monkeypatch.setattr(data_health, "kite_token_path", lambda: tmp_path / "missing_token.json")
     return stub
 
 
@@ -225,6 +227,49 @@ def test_instrument_coverage_aggregates_by_exchange(engine, settings_stub) -> No
 
     assert coverage.total == 3
     assert coverage.by_exchange == {"NSE": 2, "BSE": 1}
+
+
+def test_index_membership_coverage_reports_current_snapshot_warning(engine, settings_stub) -> None:
+    with Session(engine) as session:
+        sync_index_membership_snapshot(
+            session,
+            index_name="Nifty 50",
+            constituents=pd.DataFrame(
+                {
+                    "Symbol": ["RELIANCE", "HDFCBANK"],
+                    "Series": ["EQ", "EQ"],
+                    "Company Name": ["Reliance Industries Ltd.", "HDFC Bank Ltd."],
+                    "Industry": ["Oil Gas", "Financial Services"],
+                    "ISIN Code": ["INE002A01018", "INE040A01034"],
+                    "source_url": ["https://example.test/nifty50.csv"] * 2,
+                }
+            ),
+            effective_date=date(2026, 5, 3),
+        )
+        session.commit()
+
+    report = build_data_health_report(engine=engine, today=date(2026, 5, 3))
+    coverage = report.index_membership_coverage
+
+    assert coverage is not None
+    assert coverage.index_name == "Nifty 50"
+    assert coverage.active_members == 2
+    assert coverage.total_periods == 2
+    assert coverage.latest_from_date == date(2026, 5, 3)
+    assert coverage.source_url == "https://example.test/nifty50.csv"
+    assert coverage.historical_backfill_ready is False
+    assert coverage.warning is not None
+    assert "Historical membership backfill" in coverage.warning
+
+
+def test_index_membership_coverage_flags_missing_snapshot(engine, settings_stub) -> None:
+    report = build_data_health_report(engine=engine, today=date(2026, 5, 3))
+    coverage = report.index_membership_coverage
+
+    assert coverage is not None
+    assert coverage.active_members == 0
+    assert coverage.total_periods == 0
+    assert coverage.warning == "No active index membership snapshot has been recorded yet."
 
 
 def test_recent_refresh_runs_returns_newest_first(engine, settings_stub) -> None:

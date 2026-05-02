@@ -173,6 +173,47 @@ else:
         hide_index=True,
     )
 
+st.subheader("Index Membership History")
+membership = report.index_membership_coverage
+if membership is None or membership.active_members == 0:
+    st.warning(
+        "No active Nifty 50 membership snapshot is recorded yet. Run "
+        "`scripts\\refresh_index_membership.ps1 -Universe nifty_50`."
+    )
+else:
+    member_cols = st.columns(4)
+    member_cols[0].metric("Index", membership.index_name)
+    member_cols[1].metric("Active members", membership.active_members)
+    member_cols[2].metric("Total periods", membership.total_periods)
+    member_cols[3].metric(
+        "Historical backfill",
+        "Ready" if membership.historical_backfill_ready else "Pending",
+    )
+    st.caption(
+        "This guards backtests against using today's index list for old dates. "
+        "Current snapshots are useful, but archived historical constituent files are still needed "
+        "for fully survivorship-safe long-range backtests."
+    )
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "index": membership.index_name,
+                    "active_members": membership.active_members,
+                    "total_periods": membership.total_periods,
+                    "earliest_from_date": membership.earliest_from_date,
+                    "latest_from_date": membership.latest_from_date,
+                    "latest_observed_at": membership.latest_observed_at,
+                    "source_url": membership.source_url,
+                }
+            ]
+        ),
+        width="stretch",
+        hide_index=True,
+    )
+    if membership.warning:
+        st.warning(membership.warning)
+
 st.subheader("Source Mix")
 if price and price.by_source:
     st.dataframe(

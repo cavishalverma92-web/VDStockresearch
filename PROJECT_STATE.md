@@ -577,3 +577,10 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
   - Local DB verification: 50 membership rows, 50 active rows, `RELIANCE.NS=True`, `LTIM.NS=False` for `2026-05-03`.
   - Focused tests passed: 22 tests passed across index membership repository, signal backtest, database models, and migrations.
   - Targeted Ruff checks and format checks passed.
+- **Data Health index membership visibility completed (2026-05-03)**:
+  - Data Health report now includes Nifty 50 membership coverage: active members, total periods, earliest/latest period dates, latest observation timestamp, source URL, and historical-backfill status.
+  - Data Health page now shows an Index Membership History section with a clear warning while historical backfill is pending.
+  - Local DB verification: `Nifty 50`, 50 active members, 50 total periods, latest from date `2026-05-03`, historical backfill pending.
+  - Focused tests passed: 16 tests passed across data health, migrations, and index membership repository.
+  - Data Health Streamlit AppTest passed with 0 exceptions and 0 rendered errors.
+  - Targeted Ruff checks and format checks passed.

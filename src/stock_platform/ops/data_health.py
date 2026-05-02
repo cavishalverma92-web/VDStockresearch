@@ -22,6 +22,7 @@ from stock_platform.db import create_all_tables, get_engine
 from stock_platform.db.models import (
     CompositeScoreSnapshot,
     DailyRefreshRun,
+    IndexMembershipHistory,
     InstrumentMaster,
     PriceDaily,
 )
@@ -84,6 +85,21 @@ class InstrumentCoverage:
 
 
 @dataclass(frozen=True)
+class IndexMembershipCoverage:
+    """Current point-in-time index membership coverage."""
+
+    index_name: str
+    active_members: int
+    total_periods: int
+    earliest_from_date: date | None
+    latest_from_date: date | None
+    latest_observed_at: datetime | None
+    source_url: str | None
+    historical_backfill_ready: bool
+    warning: str | None
+
+
+@dataclass(frozen=True)
 class StaleSymbol:
     """One symbol whose latest persisted bar is older than the threshold."""
 
@@ -104,6 +120,7 @@ class DataHealthReport:
     price_coverage: PriceCoverageSummary | None = None
     composite_score_coverage: CompositeScoreCoverage | None = None
     instrument_coverage: InstrumentCoverage | None = None
+    index_membership_coverage: IndexMembershipCoverage | None = None
     stale_symbols: list[StaleSymbol] = field(default_factory=list)
 
 
@@ -128,6 +145,7 @@ def build_data_health_report(
         price_coverage = _price_coverage(session)
         composite_coverage = _composite_score_coverage(session, snapshot_today)
         instrument_coverage = _instrument_coverage(session)
+        index_membership_coverage = _index_membership_coverage(session, index_name="Nifty 50")
         stale = _stale_symbols(
             session,
             today=snapshot_today,
@@ -144,6 +162,7 @@ def build_data_health_report(
         price_coverage=price_coverage,
         composite_score_coverage=composite_coverage,
         instrument_coverage=instrument_coverage,
+        index_membership_coverage=index_membership_coverage,
         stale_symbols=stale,
     )
 
@@ -272,6 +291,66 @@ def _instrument_coverage(session: Session) -> InstrumentCoverage:
     by_exchange = {str(row[0]): int(row[1]) for row in rows}
     total = sum(by_exchange.values())
     return InstrumentCoverage(by_exchange=by_exchange, total=total)
+
+
+def _index_membership_coverage(
+    session: Session,
+    *,
+    index_name: str,
+) -> IndexMembershipCoverage:
+    active_members = (
+        session.scalar(
+            select(func.count(IndexMembershipHistory.id)).where(
+                IndexMembershipHistory.index_name == index_name,
+                IndexMembershipHistory.active.is_(True),
+                IndexMembershipHistory.to_date.is_(None),
+            )
+        )
+        or 0
+    )
+    total_periods = (
+        session.scalar(
+            select(func.count(IndexMembershipHistory.id)).where(
+                IndexMembershipHistory.index_name == index_name
+            )
+        )
+        or 0
+    )
+    earliest_from, latest_from, latest_observed = session.execute(
+        select(
+            func.min(IndexMembershipHistory.from_date),
+            func.max(IndexMembershipHistory.from_date),
+            func.max(IndexMembershipHistory.observed_at),
+        ).where(IndexMembershipHistory.index_name == index_name)
+    ).first() or (None, None, None)
+    source_url = session.scalar(
+        select(IndexMembershipHistory.source_url)
+        .where(IndexMembershipHistory.index_name == index_name)
+        .order_by(desc(IndexMembershipHistory.observed_at), desc(IndexMembershipHistory.id))
+        .limit(1)
+    )
+
+    historical_backfill_ready = bool(total_periods > active_members)
+    warning: str | None = None
+    if active_members == 0:
+        warning = "No active index membership snapshot has been recorded yet."
+    elif not historical_backfill_ready:
+        warning = (
+            "Only the current snapshot is available. Historical membership backfill is still "
+            "pending, so old backtests should be labelled as limited."
+        )
+
+    return IndexMembershipCoverage(
+        index_name=index_name,
+        active_members=int(active_members),
+        total_periods=int(total_periods),
+        earliest_from_date=_as_date(earliest_from),
+        latest_from_date=_as_date(latest_from),
+        latest_observed_at=latest_observed,
+        source_url=str(source_url) if source_url else None,
+        historical_backfill_ready=historical_backfill_ready,
+        warning=warning,
+    )
 
 
 def _stale_symbols(
