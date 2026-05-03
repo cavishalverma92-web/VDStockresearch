@@ -208,6 +208,34 @@ class BulkBlockDeal(Base):
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
+class MarketFlowDaily(Base):
+    """Daily aggregate FII/DII cash-market flow.
+
+    NSE publishes provisional FII/DII numbers each evening — buy value,
+    sell value, and net value (in INR crore). One row per (date, participant).
+    """
+
+    __tablename__ = "market_flows_daily"
+    __table_args__ = (
+        UniqueConstraint(
+            "trade_date",
+            "participant",
+            "source",
+            name="uq_market_flows_daily",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trade_date: Mapped[date] = mapped_column(Date, index=True, nullable=False)
+    participant: Mapped[str] = mapped_column(String(16), index=True, nullable=False)
+    buy_value_cr: Mapped[float | None] = mapped_column(Float)
+    sell_value_cr: Mapped[float | None] = mapped_column(Float)
+    net_value_cr: Mapped[float | None] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String(80), nullable=False, default="nse")
+    source_url: Mapped[str | None] = mapped_column(Text)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
 class CorporateAction(Base):
     """Dividend, split, bonus, or earnings event for one symbol."""
 
