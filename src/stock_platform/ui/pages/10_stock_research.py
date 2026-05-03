@@ -39,6 +39,7 @@ from stock_platform.ui.components.common import (
     help_text,
     position_size,
     pros_cons,
+    render_verdict_card,
     research_stance,
     resolve_project_path,
     risk_per_share,
@@ -121,15 +122,6 @@ tab_overview, tab_chart, tab_fund, tab_tech, tab_flows = st.tabs(
 )
 
 with tab_overview:
-    st.subheader("Research Conviction")
-    score_cols = st.columns(6)
-    score_cols[0].metric("Score", f"{composite.score:.1f}/100")
-    score_cols[1].metric("Band", composite.band)
-    score_cols[2].metric("Fundamentals", f"{composite.sub_scores['fundamentals']:.1f}")
-    score_cols[3].metric("Technicals", f"{composite.sub_scores['technicals']:.1f}")
-    score_cols[4].metric("Flows", f"{composite.sub_scores['flows']:.1f}")
-    score_cols[5].metric("Events", f"{composite.sub_scores['events_quality']:.1f}")
-
     trust_rows = build_data_trust_rows(
         symbol=symbol,
         price_frame=df,
@@ -154,22 +146,35 @@ with tab_overview:
     active = active_signal_names(ctx.signals)
     stance, detail = research_stance(composite, trust_level, active)
     pros, cons = pros_cons(composite, trust_rows, active)
-    t1, t2, t3 = st.columns([1, 2, 1])
-    t1.metric("Data trust", trust_level)
-    t2.info(trust_reason)
-    t3.metric("Active signals", len(active))
-    st.metric("Research stance", stance)
-    st.caption(detail)
+
+    render_verdict_card(
+        stance=stance,
+        detail=detail,
+        score=float(composite.score),
+        band=composite.band,
+        trust_level=trust_level,
+        active_signal_count=len(active),
+    )
+
     left, right = st.columns(2)
     with left:
-        st.markdown("##### Pros / supportive evidence")
+        st.markdown("##### Why it's interesting")
         for item in pros:
             st.markdown(f"- {item}")
     with right:
-        st.markdown("##### Cons / risk checks")
+        st.markdown("##### What to verify")
         for item in cons:
             st.markdown(f"- {item}")
-    with st.expander("Data Trust details"):
+
+    with st.expander("Inside the score"):
+        sub_cols = st.columns(4)
+        sub_cols[0].metric("Fundamentals", f"{composite.sub_scores['fundamentals']:.1f}")
+        sub_cols[1].metric("Technicals", f"{composite.sub_scores['technicals']:.1f}")
+        sub_cols[2].metric("Flows", f"{composite.sub_scores['flows']:.1f}")
+        sub_cols[3].metric("Events", f"{composite.sub_scores['events_quality']:.1f}")
+        st.caption(trust_reason)
+
+    with st.expander("Data trust details"):
         st.dataframe(data_trust_rows_to_frame(trust_rows), width="stretch", hide_index=True)
 
 with tab_chart:

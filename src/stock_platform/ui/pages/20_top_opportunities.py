@@ -5,7 +5,11 @@ from __future__ import annotations
 import streamlit as st
 
 from stock_platform.analytics.scanner import (
+    build_daily_research_brief,
     compare_latest_universe_scans,
+    daily_brief_freshness,
+    daily_brief_headline,
+    daily_brief_table,
     list_available_universes,
     load_universe,
     save_universe_scan,
@@ -114,3 +118,55 @@ else:
         file_name=f"{universe}_latest_saved_scan.csv",
         mime="text/csv",
     )
+
+st.divider()
+
+# --- Daily Research Brief (moved from Market Today) ---------------------------
+st.subheader("Daily Research Brief")
+st.caption("Universe-level diff against the previous saved scan.")
+
+brief_min_score = st.slider("Brief opportunity score", 0, 100, 60, 5, key="brief_min_score")
+brief = build_daily_research_brief(universe, min_opportunity_score=float(brief_min_score))
+
+if not brief.has_latest_scan:
+    st.info("No saved scan yet. Run a scan above to populate the brief.")
+else:
+    status, age = daily_brief_freshness(brief.latest_run_at)
+    st.markdown(f"**{daily_brief_headline(brief)}**")
+    if status == "fresh":
+        st.success(f"Latest scan is fresh: {age}.")
+    elif status == "aging":
+        st.warning(f"Latest scan is {age}. Consider refreshing.")
+    else:
+        st.warning(f"Latest scan is {age}. Run a fresh scan before relying on new decisions.")
+
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("Run", f"#{brief.latest_run_id}")
+    m2.metric("Successful", brief.successful_symbols)
+    m3.metric("Failed", brief.failed_symbols)
+    m4.metric(
+        "Avg score", "N/A" if brief.average_score is None else f"{brief.average_score:.1f}"
+    )
+    m5.metric("Top score", "N/A" if brief.top_score is None else f"{brief.top_score:.1f}")
+
+    tabs = st.tabs(["New opportunities", "Score movers", "New signals", "Action queue"])
+    with tabs[0]:
+        research_pick_button(daily_brief_table(brief.new_opportunities), key="brief_new_opps")
+    with tabs[1]:
+        improved = daily_brief_table(brief.improved)
+        weakened = daily_brief_table(brief.weakened)
+        left, right = st.columns(2)
+        with left:
+            st.markdown("##### Improved")
+            research_pick_button(improved, key="brief_improved")
+        with right:
+            st.markdown("##### Weakened")
+            research_pick_button(weakened, key="brief_weakened")
+    with tabs[2]:
+        research_pick_button(daily_brief_table(brief.new_signals), key="brief_new_signals")
+    with tabs[3]:
+        action_frame = daily_brief_table(brief.data_quality_actions, limit=15)
+        if action_frame.empty:
+            st.success("No saved-scan data-quality action rows.")
+        else:
+            st.dataframe(action_frame, width="stretch", hide_index=True)

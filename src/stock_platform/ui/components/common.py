@@ -162,6 +162,65 @@ def pros_cons(
     ]
 
 
+def _score_color(score: float) -> str:
+    if score >= 75:
+        return "#10B981"  # green
+    if score >= 60:
+        return "#3B82F6"  # blue
+    if score >= 40:
+        return "#F59E0B"  # amber
+    return "#EF4444"  # red
+
+
+def _trust_chip_class(trust_level: str) -> str:
+    level = trust_level.lower()
+    if level == "high":
+        return "chip-green"
+    if level == "medium":
+        return "chip-amber"
+    return "chip-red"
+
+
+def render_verdict_card(
+    *,
+    stance: str,
+    detail: str,
+    score: float,
+    band: str,
+    trust_level: str,
+    active_signal_count: int,
+) -> None:
+    """One hero card with the research verdict — replaces the old 6-metric strip."""
+    color = _score_color(score)
+    pct = max(0.0, min(100.0, score))
+    trust_class = _trust_chip_class(trust_level)
+    st.markdown(
+        f"""
+        <div class="verdict-card">
+          <div class="verdict-stance">{stance}</div>
+          <div class="verdict-detail">{detail}</div>
+          <div class="verdict-row">
+            <div style="min-width:120px;">
+              <div style="font-size:0.72rem;color:var(--muted);">RESEARCH SCORE</div>
+              <div style="font-size:1.45rem;font-weight:700;color:{color};">
+                {score:.1f}<span style="color:var(--muted);font-size:0.95rem;font-weight:500;"> / 100</span>
+              </div>
+            </div>
+            <div class="score-bar-wrap">
+              <div class="score-bar-fill" style="width:{pct:.1f}%;background:{color};"></div>
+            </div>
+            <div>
+              <span class="chip">{band}</span>
+              <span class="chip {trust_class}">Trust: {trust_level}</span>
+              <span class="chip">{active_signal_count} active signal{'s' if active_signal_count != 1 else ''}</span>
+            </div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def research_pick_button(frame: pd.DataFrame, *, key: str) -> None:
     if frame.empty or "symbol" not in frame.columns:
         st.dataframe(frame, width="stretch", hide_index=True)
