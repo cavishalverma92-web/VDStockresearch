@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import streamlit as st
 
 from stock_platform.analytics.scanner import (
@@ -61,6 +63,14 @@ if universe_error:
 st.caption(f"{universe_label(universe)} contains {len(tickers):,} symbol(s).")
 lookback_days = 400
 
+last_scan = st.session_state.get("last_scan_summary")
+if last_scan and last_scan.get("universe") == universe:
+    st.success(
+        f"Scan #{last_scan['run_id']} · {last_scan['successful']} ok · "
+        f"{last_scan['failed']} failed · {last_scan['duration_s']:.1f}s · "
+        f"{last_scan['matched']} matched filters"
+    )
+
 if st.button("Run universe scan", type="primary", disabled=not tickers):
     scan_tickers = tickers[: int(max_symbols)]
     progress = st.progress(0.0, text=f"Scanning 0/{len(scan_tickers)} symbols...")
@@ -68,12 +78,14 @@ if st.button("Run universe scan", type="primary", disabled=not tickers):
     def _on_progress(done: int, total: int, sym: str) -> None:
         progress.progress(done / total, text=f"Scanned {done}/{total}: {sym}")
 
+    started = time.monotonic()
     results = scan_universe(
         scan_tickers,
         lookback_days=lookback_days,
         max_workers=1,
         progress_callback=_on_progress,
     )
+    duration = time.monotonic() - started
     progress.empty()
     run_id = save_universe_scan(
         universe_name=universe,
@@ -89,9 +101,14 @@ if st.button("Run universe scan", type="primary", disabled=not tickers):
         (success["composite_score"].fillna(0) >= min_score)
         & (success["active_signal_count"].fillna(0) >= min_signals)
     ]
-    st.success(
-        f"Scan #{run_id} saved. {len(success)} successful, {len(frame) - len(success)} failed."
-    )
+    st.session_state["last_scan_summary"] = {
+        "universe": universe,
+        "run_id": run_id,
+        "successful": len(success),
+        "failed": len(frame) - len(success),
+        "matched": len(filtered),
+        "duration_s": duration,
+    }
     research_pick_button(filtered, key="top_opportunities_live")
     st.download_button(
         "Download scan CSV",

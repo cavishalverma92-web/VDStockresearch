@@ -60,19 +60,24 @@ latest = df.iloc[-1]
 prev = df.iloc[-2] if len(df) > 1 else latest
 pct = ((latest["close"] - prev["close"]) / prev["close"]) * 100 if prev["close"] else 0.0
 
-c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("Symbol", symbol)
-c2.metric("Last close", f"INR {latest['close']:.2f}", f"{pct:+.2f}% d/d")
-c3.metric("Rows", f"{len(df):,}")
-c4.metric("Last date", df.index[-1].strftime("%Y-%m-%d"))
-c5.metric("Data source", ctx.price_provider_label)
+c1, c2, c3 = st.columns(3)
+c1.metric(symbol, f"INR {latest['close']:.2f}", f"{pct:+.2f}% d/d")
+c2.metric("Last bar", df.index[-1].strftime("%Y-%m-%d"), help=f"{len(df):,} rows loaded")
+c3.metric("Data source", ctx.price_provider_label)
 
 if ctx.fallback_reason:
     st.warning(ctx.fallback_reason)
-elif ctx.price_source == "kite":
-    st.success("Data source: Zerodha Kite")
 
-with st.expander("Data quality report", expanded=not ctx.report.ok):
+warning_count = len(ctx.report.warnings)
+error_count = len(ctx.report.errors)
+if error_count:
+    dq_label = f"Data quality: {error_count} error(s), {warning_count} warning(s)"
+elif warning_count:
+    dq_label = f"Data quality: {warning_count} warning(s)"
+else:
+    dq_label = "Data quality: all checks passed"
+
+with st.expander(dq_label, expanded=bool(error_count)):
     if ctx.report.ok and not ctx.report.warnings:
         st.success("All checks passed.")
     for warning in ctx.report.warnings:
