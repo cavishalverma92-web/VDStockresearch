@@ -78,10 +78,10 @@ if st.button("Run backtest", type="primary"):
     )
     completed = [trade for trade in trades if trade.return_pct is not None]
     pending = [trade for trade in trades if trade.return_pct is None]
-    st.markdown(
-        f"**{len(completed)}** completed trade(s) | **{len(pending)}** too recent | "
-        f"**{holding_days}-day** holding period"
-    )
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Completed trades", len(completed))
+    m2.metric("Too recent", len(pending), help="Signal fired but holding period not yet reached.")
+    m3.metric("Holding period", f"{holding_days} days")
     if summaries:
         st.subheader("Per-signal summary")
         st.dataframe(summaries_to_frame(summaries), width="stretch", hide_index=True)

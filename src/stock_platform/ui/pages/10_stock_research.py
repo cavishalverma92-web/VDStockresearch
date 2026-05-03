@@ -39,6 +39,7 @@ from stock_platform.ui.components.common import (
     help_text,
     position_size,
     pros_cons,
+    render_sparkline,
     render_verdict_card,
     research_stance,
     resolve_project_path,
@@ -60,10 +61,15 @@ latest = df.iloc[-1]
 prev = df.iloc[-2] if len(df) > 1 else latest
 pct = ((latest["close"] - prev["close"]) / prev["close"]) * 100 if prev["close"] else 0.0
 
-c1, c2, c3 = st.columns(3)
-c1.metric(symbol, f"INR {latest['close']:.2f}", f"{pct:+.2f}% d/d")
-c2.metric("Last bar", df.index[-1].strftime("%Y-%m-%d"), help=f"{len(df):,} rows loaded")
-c3.metric("Data source", ctx.price_provider_label)
+c1, c2, c3 = st.columns([2, 2, 1])
+with c1:
+    st.metric(symbol, f"INR {latest['close']:.2f}", f"{pct:+.2f}% d/d")
+with c2:
+    spark_color = "#10B981" if pct >= 0 else "#EF4444"
+    render_sparkline(df["close"].tail(60), color=spark_color, height=64)
+    st.caption("Close · last 60 bars")
+with c3:
+    st.metric("Last bar", df.index[-1].strftime("%Y-%m-%d"), help=f"{len(df):,} rows · {ctx.price_provider_label}")
 
 if ctx.fallback_reason:
     st.warning(ctx.fallback_reason)
@@ -288,6 +294,15 @@ with tab_tech:
         format_number(latest_t.get("relative_volume")),
         help=help_text("Relative volume"),
     )
+    if "rsi_14" in ctx.technical_df.columns:
+        rsi_series = ctx.technical_df["rsi_14"].tail(60)
+        latest_rsi = rsi_series.dropna().iloc[-1] if not rsi_series.dropna().empty else None
+        rsi_color = (
+            "#EF4444" if latest_rsi is not None and (latest_rsi >= 70 or latest_rsi <= 30)
+            else "#2563EB"
+        )
+        render_sparkline(rsi_series, color=rsi_color, height=56)
+        st.caption("RSI 14 · last 60 bars (red zones: <30 oversold, >70 stretched)")
     signal_rows = [
         {
             "Signal": signal.name,

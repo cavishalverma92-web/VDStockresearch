@@ -162,6 +162,29 @@ def pros_cons(
     ]
 
 
+def render_sparkline(values: pd.Series, *, color: str = "#2563EB", height: int = 60) -> None:
+    """Render a thin trend sparkline. Strips axes/grid so only the line shows."""
+    import plotly.graph_objects as go
+
+    series = values.dropna()
+    if series.empty:
+        st.caption("—")
+        return
+    fig = go.Figure(go.Scatter(x=list(range(len(series))), y=series.tolist(),
+                               mode="lines", line=dict(color=color, width=1.6),
+                               hoverinfo="y"))
+    fig.update_layout(
+        height=height,
+        margin=dict(l=0, r=0, t=2, b=2),
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
+        showlegend=False,
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+
 def _score_color(score: float) -> str:
     if score >= 75:
         return "#10B981"  # green
