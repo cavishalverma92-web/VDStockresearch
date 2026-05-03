@@ -12,6 +12,9 @@ from typing import Protocol
 import pandas as pd
 from sqlalchemy import Engine
 
+from stock_platform.analytics.fundamentals.market_cap import (
+    reconstruct_historical_market_cap,
+)
 from stock_platform.analytics.fundamentals.schema import (
     FundamentalSnapshot,
     QuarterlyFundamentalSnapshot,
@@ -20,6 +23,7 @@ from stock_platform.data.providers.base import FundamentalsDataProvider
 from stock_platform.data.repositories import (
     fetch_fundamentals_annual,
     fetch_fundamentals_quarterly,
+    fetch_price_daily,
     upsert_fundamentals_annual,
     upsert_fundamentals_quarterly,
 )
@@ -46,11 +50,13 @@ class DbFundamentalsProvider(FundamentalsDataProvider):
         engine: Engine | None = None,
         preferred_source: str | None = None,
         write_through: bool = True,
+        enrich_market_cap: bool = False,
     ) -> None:
         self._fallback = fallback
         self._engine = engine or get_engine()
         self._preferred_source = preferred_source
         self._write_through = write_through
+        self._enrich_market_cap = enrich_market_cap
 
     # ------------------------------------------------------------------
     # FundamentalsDataProvider interface
@@ -92,7 +98,8 @@ class DbFundamentalsProvider(FundamentalsDataProvider):
             frame = fetch_fundamentals_annual(session, symbol, source=self._preferred_source)
 
         if not frame.empty:
-            return _pick_one_per_year(frame, self._preferred_source)
+            picked = _pick_one_per_year(frame, self._preferred_source)
+            return self._maybe_enrich_market_cap(picked, symbol)
 
         if self._fallback is None:
             return frame
@@ -101,7 +108,7 @@ class DbFundamentalsProvider(FundamentalsDataProvider):
             source = str(live.iloc[0].get("source") or self._fallback_source())
             with get_session(self._engine) as session:
                 upsert_fundamentals_annual(session, symbol, live, source=source)
-        return live
+        return self._maybe_enrich_market_cap(live, symbol)
 
     def get_quarterly_fundamentals(self, symbol: str) -> pd.DataFrame:
         with get_session(self._engine) as session:
@@ -185,6 +192,20 @@ class DbFundamentalsProvider(FundamentalsDataProvider):
         return out
 
     # ------------------------------------------------------------------
+
+    def _maybe_enrich_market_cap(self, frame: pd.DataFrame, symbol: str) -> pd.DataFrame:
+        """Reconstruct PIT market cap from price history when enabled."""
+        if not self._enrich_market_cap or frame is None or frame.empty:
+            return frame
+        try:
+            with get_session(self._engine) as session:
+                price_history = fetch_price_daily(session, symbol)
+        except Exception as exc:
+            log.warning("market cap enrichment skipped for {}: {}", symbol, exc)
+            return frame
+        if price_history is None or price_history.empty:
+            return frame
+        return reconstruct_historical_market_cap(frame, price_history)
 
     def _fallback_source(self) -> str:
         return getattr(self._fallback, "name", "unknown") if self._fallback else "unknown"

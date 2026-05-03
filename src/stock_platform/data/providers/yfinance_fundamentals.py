@@ -85,6 +85,7 @@ _QUARTERLY_COLUMNS = [
 _ANNUAL_COLUMNS = [
     "symbol",
     "fiscal_year",
+    "period_end",
     "revenue",
     "gross_profit",
     "ebitda",
@@ -323,7 +324,7 @@ class YFinanceFundamentalsProvider(FundamentalsDataProvider):
         rows: list[dict[str, object]] = []
         for dt in all_dates:
             fy = _fiscal_year(dt)
-            row: dict[str, object] = {"fiscal_year": fy}
+            row: dict[str, object] = {"fiscal_year": fy, "period_end": dt.date()}
 
             # Income statement
             inc_row = income.loc[dt] if dt in income.index else pd.Series(dtype=float)

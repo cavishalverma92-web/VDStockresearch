@@ -25,6 +25,7 @@ Notes & caveats:
 from __future__ import annotations
 
 import re
+from datetime import date
 from html.parser import HTMLParser
 
 import httpx
@@ -386,6 +387,7 @@ def _parse_section(
         record: dict[str, object] = {"fiscal_year": period[0]}
         if period_kind == "quarter":
             record["fiscal_quarter"] = period[1]
+        record["period_end"] = _period_end_for(period, period_kind)
         record.update(metrics)
         records.append(record)
     return pd.DataFrame(records)
@@ -404,6 +406,22 @@ def _merge_annual_sections(frames: list[pd.DataFrame]) -> pd.DataFrame:
                 merged[base] = merged[base].fillna(merged[col])
                 merged = merged.drop(columns=[col])
     return merged
+
+
+def _period_end_for(period: tuple[int, int | None], period_kind: str) -> date | None:
+    """Map a parsed period to a fiscal-period end date.
+
+    Indian fiscal year ends 31 March; quarter ends are 30-Jun, 30-Sep, 31-Dec, 31-Mar.
+    """
+    fiscal_year, quarter = period
+    if period_kind == "annual" or quarter is None:
+        return date(fiscal_year, 3, 31)
+    quarter_end_months = {1: (6, 30), 2: (9, 30), 3: (12, 31), 4: (3, 31)}
+    if quarter not in quarter_end_months:
+        return None
+    month, day = quarter_end_months[quarter]
+    calendar_year = fiscal_year - 1 if quarter in (1, 2, 3) else fiscal_year
+    return date(calendar_year, month, day)
 
 
 # ---------------------------------------------------------------------------

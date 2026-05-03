@@ -16,6 +16,9 @@ from stock_platform.analytics.fundamentals.extended_ratios import (
     interest_coverage,
     working_capital_trend,
 )
+from stock_platform.analytics.fundamentals.market_cap import (
+    reconstruct_historical_market_cap,
+)
 from stock_platform.analytics.fundamentals.quality_scores import (
     calculate_altman_z_score,
     calculate_piotroski_f_score,
@@ -61,5 +64,6 @@ __all__ = [
     "interest_coverage",
     "is_financial_sector",
     "is_industrial_metric_applicable",
+    "reconstruct_historical_market_cap",
     "working_capital_trend",
 ]
