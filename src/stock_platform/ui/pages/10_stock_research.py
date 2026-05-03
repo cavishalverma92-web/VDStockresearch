@@ -17,6 +17,7 @@ from stock_platform.analytics.fundamentals import (
     calculate_growth,
     calculate_piotroski_f_score,
     calculate_quarterly_growth,
+    compare_fundamentals_sources,
     compute_multi_year_cagr,
     is_financial_sector,
 )
@@ -30,6 +31,8 @@ from stock_platform.data.providers.corporate_actions import (
 )
 from stock_platform.data.providers.db_fundamentals import DbFundamentalsProvider
 from stock_platform.data.providers.nse import fetch_delivery_data
+from stock_platform.data.repositories.fundamentals import fetch_fundamentals_annual
+from stock_platform.db import get_session
 from stock_platform.ops import build_data_trust_rows, data_trust_level, data_trust_rows_to_frame
 from stock_platform.scoring import score_stock
 from stock_platform.ui.components.common import (
@@ -137,6 +140,15 @@ composite = score_stock(
     result_volatility=result_vol,
 )
 
+cross_source_report = None
+if fundamentals_provider is db_provider:
+    try:
+        with get_session() as _session:
+            multi_source_frame = fetch_fundamentals_annual(_session, symbol)
+        cross_source_report = compare_fundamentals_sources(multi_source_frame, symbol)
+    except Exception:
+        cross_source_report = None
+
 tab_overview, tab_chart, tab_fund, tab_tech, tab_flows = st.tabs(
     ["Overview", "Chart", "Fundamentals", "Technicals & signals", "Flows & events"]
 )
@@ -161,6 +173,7 @@ with tab_overview:
         active_signal_count=sum(1 for signal in ctx.signals if signal.active),
         delivery_available=score_delivery_stats is not None,
         result_volatility_available=result_vol is not None,
+        cross_source_report=cross_source_report,
     )
     trust_level, trust_reason = data_trust_level(trust_rows)
     active = active_signal_names(ctx.signals)

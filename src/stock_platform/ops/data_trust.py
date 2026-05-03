@@ -8,6 +8,8 @@ from typing import Any
 
 import pandas as pd
 
+from stock_platform.analytics.fundamentals.cross_source import CrossSourceReport
+
 
 def build_data_trust_rows(
     *,
@@ -29,6 +31,7 @@ def build_data_trust_rows(
     active_signal_count: int = 0,
     delivery_available: bool = False,
     result_volatility_available: bool = False,
+    cross_source_report: CrossSourceReport | None = None,
 ) -> list[dict[str, Any]]:
     """Return a plain-English trust checklist for the selected stock.
 
@@ -97,6 +100,7 @@ def build_data_trust_rows(
             "coverage": _flows_events_coverage(delivery_available, result_volatility_available),
             "what_to_check": "Delivery and result-event data remain limited in the MVP.",
         },
+        _cross_source_row(cross_source_report),
         {
             "area": "Composite score",
             "status": "OK" if not missing_list and not risk_list else "PARTIAL",
@@ -247,6 +251,39 @@ def _flows_events_coverage(delivery_available: bool, result_volatility_available
     else:
         missing.append("result volatility")
     return f"available: {', '.join(available) or 'none'}; missing: {', '.join(missing) or 'none'}"
+
+
+def _cross_source_row(report: CrossSourceReport | None) -> dict[str, str]:
+    """Trust row summarizing fundamentals cross-source agreement."""
+    if report is None or len(report.sources) < 2:
+        return {
+            "area": "Fundamentals cross-check",
+            "status": "PARTIAL",
+            "source": "single source" if report and report.sources else "no fundamentals sources",
+            "freshness": "n/a",
+            "coverage": "no second source available to cross-check",
+            "what_to_check": (
+                "Run refresh_fundamentals with --source screener (or another provider) "
+                "to enable cross-source validation."
+            ),
+        }
+    if not report.has_disagreements:
+        return {
+            "area": "Fundamentals cross-check",
+            "status": "OK",
+            "source": ", ".join(report.sources),
+            "freshness": "current",
+            "coverage": f"{len(report.fields_compared)} fields × shared years",
+            "what_to_check": report.summary_text(),
+        }
+    return {
+        "area": "Fundamentals cross-check",
+        "status": "PARTIAL",
+        "source": ", ".join(report.sources),
+        "freshness": "current",
+        "coverage": f"{len(report.disagreements)} field-year disagreement(s)",
+        "what_to_check": report.summary_text(),
+    }
 
 
 def _composite_note(missing: Sequence[str], risks: Sequence[str]) -> str:

@@ -5,6 +5,11 @@ from stock_platform.analytics.fundamentals.cagr import (
     calculate_cagr,
     compute_multi_year_cagr,
 )
+from stock_platform.analytics.fundamentals.cross_source import (
+    CrossSourceReport,
+    FieldDisagreement,
+    compare_fundamentals_sources,
+)
 from stock_platform.analytics.fundamentals.extended_ratios import (
     cash_conversion_cycle,
     compute_extended_health,
@@ -34,8 +39,10 @@ from stock_platform.analytics.fundamentals.sector_policy import (
 )
 
 __all__ = [
-    "FundamentalSnapshot",
     "BankingFundamentalSnapshot",
+    "CrossSourceReport",
+    "FieldDisagreement",
+    "FundamentalSnapshot",
     "QuarterlyFundamentalSnapshot",
     "ScoreResult",
     "cagr_summary_for_metric",
@@ -46,6 +53,7 @@ __all__ = [
     "calculate_piotroski_f_score",
     "calculate_quarterly_growth",
     "cash_conversion_cycle",
+    "compare_fundamentals_sources",
     "compute_extended_health",
     "compute_multi_year_cagr",
     "fundamentals_required_columns_for",
