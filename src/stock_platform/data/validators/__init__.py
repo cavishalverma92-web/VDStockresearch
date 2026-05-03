@@ -12,12 +12,18 @@ from stock_platform.data.validators.ohlcv_validator import (
     OHLCVValidationError,
     validate_ohlcv,
 )
+from stock_platform.data.validators.quarterly_fundamentals_validator import (
+    QuarterlyFundamentalsValidationError,
+    validate_quarterly_fundamentals,
+)
 
 __all__ = [
     "BankingFundamentalsValidationError",
     "FundamentalsValidationError",
     "OHLCVValidationError",
+    "QuarterlyFundamentalsValidationError",
     "validate_annual_fundamentals",
     "validate_banking_fundamentals",
     "validate_ohlcv",
+    "validate_quarterly_fundamentals",
 ]

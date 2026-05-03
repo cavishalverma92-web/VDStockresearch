@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from stock_platform.analytics.fundamentals.schema import FundamentalSnapshot
+from stock_platform.analytics.fundamentals.schema import (
+    FundamentalSnapshot,
+    QuarterlyFundamentalSnapshot,
+)
 
 
 def safe_divide(numerator: float | None, denominator: float | None) -> float | None:
@@ -106,6 +109,58 @@ def calculate_growth(
             previous.book_value,
         ),
     }
+
+
+def calculate_quarterly_growth(
+    snapshots: list[QuarterlyFundamentalSnapshot],
+) -> dict[str, float | None]:
+    """Compute QoQ (vs last quarter) and YoY (vs same quarter last year) growth.
+
+    Snapshots must be sorted ascending by ``(fiscal_year, fiscal_quarter)``.
+    Returns ``None`` for any growth metric that can't be computed (missing
+    comparison period or zero/None denominator).
+    """
+    out: dict[str, float | None] = {
+        "revenue_qoq": None,
+        "revenue_yoy": None,
+        "net_income_qoq": None,
+        "net_income_yoy": None,
+        "ebitda_qoq": None,
+        "ebitda_yoy": None,
+        "eps_qoq": None,
+        "eps_yoy": None,
+    }
+    if not snapshots:
+        return out
+
+    latest = snapshots[-1]
+    prev_q = snapshots[-2] if len(snapshots) >= 2 else None
+    prev_y = _find_year_ago(snapshots, latest)
+
+    for metric in ("revenue", "net_income", "ebitda", "eps"):
+        if prev_q is not None:
+            out[f"{metric}_qoq"] = _pct_change(getattr(latest, metric), getattr(prev_q, metric))
+        if prev_y is not None:
+            out[f"{metric}_yoy"] = _pct_change(getattr(latest, metric), getattr(prev_y, metric))
+    return out
+
+
+def _find_year_ago(
+    snapshots: list[QuarterlyFundamentalSnapshot],
+    latest: QuarterlyFundamentalSnapshot,
+) -> QuarterlyFundamentalSnapshot | None:
+    target_year = latest.fiscal_year - 1
+    target_quarter = latest.fiscal_quarter
+    for snap in snapshots:
+        if snap.fiscal_year == target_year and snap.fiscal_quarter == target_quarter:
+            return snap
+    return None
+
+
+def _pct_change(current: float | None, previous: float | None) -> float | None:
+    if current is None or previous is None or previous == 0:
+        return None
+    return (current - previous) / abs(previous)
 
 
 def _capital_employed(snapshot: FundamentalSnapshot) -> float | None:

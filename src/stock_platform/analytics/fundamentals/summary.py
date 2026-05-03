@@ -10,7 +10,11 @@ from stock_platform.analytics.fundamentals.quality_scores import (
     calculate_altman_z_score,
     calculate_piotroski_f_score,
 )
-from stock_platform.analytics.fundamentals.ratios import calculate_basic_ratios, calculate_growth
+from stock_platform.analytics.fundamentals.ratios import (
+    calculate_basic_ratios,
+    calculate_growth,
+    calculate_quarterly_growth,
+)
 from stock_platform.analytics.fundamentals.sector_ranking import compute_sector_percentile_ranks
 from stock_platform.data.validators import validate_annual_fundamentals
 
@@ -20,6 +24,10 @@ class _FundamentalsProviderLike(Protocol):
 
     def get_annual_fundamentals(self, symbol: str) -> pd.DataFrame: ...
     def get_snapshots(self, symbol: str) -> list: ...
+
+    # Optional — providers without quarterly data should fall back to no-op.
+    def get_quarterly_snapshots(self, symbol: str) -> list:  # pragma: no cover
+        ...
 
 
 def build_fundamentals_summary(
@@ -62,6 +70,16 @@ def build_fundamentals_summary(
         altman = calculate_altman_z_score(latest)
         source = str(frame.iloc[-1].get("source", "unknown"))
 
+        quarterly_growth: dict[str, float | None] = {}
+        get_quarterly = getattr(provider, "get_quarterly_snapshots", None)
+        if callable(get_quarterly):
+            try:
+                q_snaps = get_quarterly(symbol)
+            except Exception:
+                q_snaps = []
+            if q_snaps:
+                quarterly_growth = calculate_quarterly_growth(q_snaps)
+
         status = "ok"
         if report.errors:
             status = "error"
@@ -91,6 +109,12 @@ def build_fundamentals_summary(
                 "price_to_earnings": ratios["price_to_earnings"],
                 "ev_to_ebitda": ratios["ev_to_ebitda"],
                 "ev_to_sales": ratios["ev_to_sales"],
+                "revenue_qoq_pct": _as_percent(quarterly_growth.get("revenue_qoq")),
+                "revenue_yoy_pct": _as_percent(quarterly_growth.get("revenue_yoy")),
+                "net_income_qoq_pct": _as_percent(quarterly_growth.get("net_income_qoq")),
+                "net_income_yoy_pct": _as_percent(quarterly_growth.get("net_income_yoy")),
+                "ebitda_yoy_pct": _as_percent(quarterly_growth.get("ebitda_yoy")),
+                "eps_yoy_pct": _as_percent(quarterly_growth.get("eps_yoy")),
                 "piotroski_f_score": piotroski.score if piotroski else None,
                 "altman_z_score": altman.score,
                 "sector": _str_or_none(frame.iloc[-1].get("sector")),

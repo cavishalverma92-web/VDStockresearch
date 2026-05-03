@@ -15,10 +15,15 @@ from stock_platform.analytics.fundamentals.quality_scores import (
     calculate_altman_z_score,
     calculate_piotroski_f_score,
 )
-from stock_platform.analytics.fundamentals.ratios import calculate_basic_ratios, calculate_growth
+from stock_platform.analytics.fundamentals.ratios import (
+    calculate_basic_ratios,
+    calculate_growth,
+    calculate_quarterly_growth,
+)
 from stock_platform.analytics.fundamentals.schema import (
     BankingFundamentalSnapshot,
     FundamentalSnapshot,
+    QuarterlyFundamentalSnapshot,
     ScoreResult,
 )
 from stock_platform.analytics.fundamentals.sector_policy import (
@@ -31,6 +36,7 @@ from stock_platform.analytics.fundamentals.sector_policy import (
 __all__ = [
     "FundamentalSnapshot",
     "BankingFundamentalSnapshot",
+    "QuarterlyFundamentalSnapshot",
     "ScoreResult",
     "cagr_summary_for_metric",
     "calculate_altman_z_score",
@@ -38,6 +44,7 @@ __all__ = [
     "calculate_cagr",
     "calculate_growth",
     "calculate_piotroski_f_score",
+    "calculate_quarterly_growth",
     "cash_conversion_cycle",
     "compute_extended_health",
     "compute_multi_year_cagr",

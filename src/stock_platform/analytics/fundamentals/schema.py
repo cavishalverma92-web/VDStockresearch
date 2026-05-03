@@ -47,6 +47,30 @@ class FundamentalSnapshot:
 
 
 @dataclass(frozen=True)
+class QuarterlyFundamentalSnapshot:
+    """One quarterly fundamentals snapshot for a company.
+
+    Indian fiscal year runs Apr–Mar; Q1 = Apr–Jun, Q2 = Jul–Sep, Q3 = Oct–Dec,
+    Q4 = Jan–Mar. ``fiscal_year`` is the year that fiscal period ends in
+    (so the quarter ending 2025-03-31 belongs to FY2025 / Q4).
+    """
+
+    symbol: str
+    fiscal_year: int
+    fiscal_quarter: int
+    revenue: float | None = None
+    ebitda: float | None = None
+    ebit: float | None = None
+    net_income: float | None = None
+    eps: float | None = None
+    operating_cash_flow: float | None = None
+    free_cash_flow: float | None = None
+    total_assets: float | None = None
+    total_liabilities: float | None = None
+    shares_outstanding: float | None = None
+
+
+@dataclass(frozen=True)
 class BankingFundamentalSnapshot:
     """One annual bank/financial-services metrics snapshot.
 

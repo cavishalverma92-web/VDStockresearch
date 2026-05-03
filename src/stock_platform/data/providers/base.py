@@ -53,6 +53,15 @@ class FundamentalsDataProvider(ABC):
     @abstractmethod
     def get_cash_flow(self, symbol: str) -> pd.DataFrame: ...
 
+    def get_quarterly_fundamentals(self, symbol: str) -> pd.DataFrame:
+        """Return one row per fiscal quarter, sorted ascending.
+
+        Default returns an empty frame so providers without quarterly data
+        (e.g. the manual CSV provider) don't have to implement this. Concrete
+        providers should override.
+        """
+        return pd.DataFrame()
+
 
 class CorporateActionsProvider(ABC):
     """Splits, bonuses, dividends, buybacks, rights."""

@@ -14,7 +14,10 @@ from __future__ import annotations
 import pandas as pd
 import yfinance as yf
 
-from stock_platform.analytics.fundamentals.schema import FundamentalSnapshot
+from stock_platform.analytics.fundamentals.schema import (
+    FundamentalSnapshot,
+    QuarterlyFundamentalSnapshot,
+)
 from stock_platform.data.providers.base import FundamentalsDataProvider
 from stock_platform.utils.logging import get_logger
 
@@ -56,6 +59,27 @@ _CASHFLOW_MAP: dict[str, str] = {
     "Capital Expenditure": "capital_expenditure",
     "Free Cash Flow": "free_cash_flow",
 }
+
+# Columns returned by get_quarterly_fundamentals
+_QUARTERLY_COLUMNS = [
+    "symbol",
+    "fiscal_year",
+    "fiscal_quarter",
+    "period_end",
+    "revenue",
+    "ebitda",
+    "ebit",
+    "net_income",
+    "eps",
+    "operating_cash_flow",
+    "free_cash_flow",
+    "total_assets",
+    "total_liabilities",
+    "shares_outstanding",
+    "source",
+    "source_url",
+]
+
 
 # Columns returned by get_annual_fundamentals / get_all_annual_fundamentals
 _ANNUAL_COLUMNS = [
@@ -196,6 +220,48 @@ class YFinanceFundamentalsProvider(FundamentalsDataProvider):
         """Not supported for the yfinance provider (no universe list here)."""
         return pd.DataFrame(columns=_ANNUAL_COLUMNS)
 
+    def get_quarterly_fundamentals(self, symbol: str) -> pd.DataFrame:
+        """Fetch quarterly fundamentals for one symbol from yfinance."""
+        try:
+            ticker = yf.Ticker(symbol)
+            rows = self._build_quarterly_rows(ticker)
+            if not rows:
+                log.warning("yfinance returned no usable quarterly rows for {}", symbol)
+                return pd.DataFrame(columns=_QUARTERLY_COLUMNS)
+
+            frame = pd.DataFrame(rows)
+            frame["symbol"] = symbol.upper()
+            frame["source"] = "yfinance"
+            frame["source_url"] = f"https://finance.yahoo.com/quote/{symbol}"
+            return frame.sort_values(["fiscal_year", "fiscal_quarter"]).reset_index(drop=True)
+        except Exception as exc:
+            log.warning("yfinance quarterly fundamentals failed for {}: {}", symbol, exc)
+            return pd.DataFrame(columns=_QUARTERLY_COLUMNS)
+
+    def get_quarterly_snapshots(self, symbol: str) -> list[QuarterlyFundamentalSnapshot]:
+        """Return quarterly fundamentals as typed snapshots."""
+        frame = self.get_quarterly_fundamentals(symbol)
+        snapshots: list[QuarterlyFundamentalSnapshot] = []
+        for row in frame.to_dict(orient="records"):
+            snapshots.append(
+                QuarterlyFundamentalSnapshot(
+                    symbol=str(row["symbol"]),
+                    fiscal_year=int(row["fiscal_year"]),
+                    fiscal_quarter=int(row["fiscal_quarter"]),
+                    revenue=_f(row.get("revenue")),
+                    ebitda=_f(row.get("ebitda")),
+                    ebit=_f(row.get("ebit")),
+                    net_income=_f(row.get("net_income")),
+                    eps=_f(row.get("eps")),
+                    operating_cash_flow=_f(row.get("operating_cash_flow")),
+                    free_cash_flow=_f(row.get("free_cash_flow")),
+                    total_assets=_f(row.get("total_assets")),
+                    total_liabilities=_f(row.get("total_liabilities")),
+                    shares_outstanding=_f(row.get("shares_outstanding")),
+                )
+            )
+        return snapshots
+
     def get_snapshots(self, symbol: str) -> list[FundamentalSnapshot]:
         """Return annual fundamentals as typed FundamentalSnapshot objects."""
         frame = self.get_annual_fundamentals(symbol)
@@ -288,6 +354,34 @@ class YFinanceFundamentalsProvider(FundamentalsDataProvider):
         log.info("yfinance fundamentals: {} annual rows for {}", len(rows), symbol)
         return rows
 
+    def _build_quarterly_rows(self, ticker: yf.Ticker) -> list[dict[str, object]]:
+        income = _transpose_statements(_safe_attr(ticker, "quarterly_income_stmt"))
+        balance = _transpose_statements(_safe_attr(ticker, "quarterly_balance_sheet"))
+        cashflow = _transpose_statements(_safe_attr(ticker, "quarterly_cashflow"))
+
+        if income.empty and balance.empty:
+            return []
+
+        all_dates = sorted(set(income.index) | set(balance.index) | set(cashflow.index))
+
+        rows: list[dict[str, object]] = []
+        for dt in all_dates:
+            row: dict[str, object] = {
+                "fiscal_year": _fiscal_year(dt),
+                "fiscal_quarter": _fiscal_quarter(dt),
+                "period_end": dt.date(),
+            }
+
+            inc_row = income.loc[dt] if dt in income.index else pd.Series(dtype=float)
+            _map_row(inc_row, _INCOME_MAP, row)
+            bal_row = balance.loc[dt] if dt in balance.index else pd.Series(dtype=float)
+            _map_row(bal_row, _BALANCE_MAP, row)
+            cf_row = cashflow.loc[dt] if dt in cashflow.index else pd.Series(dtype=float)
+            _map_row(cf_row, _CASHFLOW_MAP, row)
+
+            rows.append(row)
+        return rows
+
 
 # ---------------------------------------------------------------------------
 # Module-level helpers
@@ -325,6 +419,26 @@ def _fiscal_year(dt: pd.Timestamp) -> int:
         return dt.year
     # April–December end date → next year's FY label (e.g. 2024-12-31 → FY2025)
     return dt.year + 1
+
+
+def _fiscal_quarter(dt: pd.Timestamp) -> int:
+    """Indian FY quarter: Apr–Jun=Q1, Jul–Sep=Q2, Oct–Dec=Q3, Jan–Mar=Q4."""
+    month = dt.month
+    if 4 <= month <= 6:
+        return 1
+    if 7 <= month <= 9:
+        return 2
+    if 10 <= month <= 12:
+        return 3
+    return 4
+
+
+def _safe_attr(ticker: yf.Ticker, name: str) -> pd.DataFrame | None:
+    """Return ``getattr(ticker, name)`` swallowing yfinance attribute errors."""
+    try:
+        return getattr(ticker, name, None)
+    except Exception:
+        return None
 
 
 def _enterprise_value(market_cap: float | None, net_debt: object) -> float | None:
