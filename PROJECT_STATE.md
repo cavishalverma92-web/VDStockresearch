@@ -584,3 +584,12 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
   - Focused tests passed: 16 tests passed across data health, migrations, and index membership repository.
   - Data Health Streamlit AppTest passed with 0 exceptions and 0 rendered errors.
   - Targeted Ruff checks and format checks passed.
+- **Historical index membership importer skeleton completed (2026-05-03)**:
+  - Added local-file importer job `stock_platform.jobs.import_index_membership_history`.
+  - Added PowerShell helper `scripts/import_index_membership_history.ps1`.
+  - Added `data/universe/history/nifty_50/README.md` and updated `.gitignore` so local archived CSVs stay uncommitted.
+  - The importer discovers dated CSV files such as `nifty_50_2024-03-31.csv`, dry-runs by default, and requires explicit `-Apply -ReplaceExisting` to rebuild overlapping history.
+  - Updated `docs/INDEX_MEMBERSHIP_HISTORY.md` with the historical backfill workflow and safety notes.
+  - Smoke-tested default dry-run with no archived files: failed safely with a beginner-readable message and changed nothing.
+  - Focused tests passed: 19 tests passed across importer, index membership repository, and data health.
+  - Targeted Ruff checks and format checks passed.

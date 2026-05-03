@@ -58,3 +58,52 @@ wrong universe for old signals.
 Backfill monthly historical NSE index files into `index_membership_history`.
 That will let us test strategies against the actual Nifty 50 membership on each
 old signal date instead of only the current snapshot.
+
+## Historical Backfill From Local CSV Files
+
+The project now has a safe local-file importer. It does not scrape aggressively
+or guess from websites. You place archived constituent CSVs in a folder, and the
+job imports them in chronological order.
+
+Recommended folder:
+
+```text
+data/universe/history/nifty_50/
+```
+
+Recommended filenames:
+
+```text
+nifty_50_2024-03-31.csv
+nifty_50_2024-06-30.csv
+nifty_50_2024-09-30.csv
+```
+
+The date in the filename becomes the snapshot effective date.
+
+Dry run first:
+
+```powershell
+.\scripts\import_index_membership_history.ps1 -Universe nifty_50
+```
+
+Apply and rebuild this index/source from the files:
+
+```powershell
+.\scripts\import_index_membership_history.ps1 -Universe nifty_50 -Apply -ReplaceExisting
+```
+
+Why `-ReplaceExisting` exists:
+
+If you already have today's Nifty 50 snapshot and then import old files, the
+job must rebuild the periods chronologically. Without replacement, old files can
+overlap newer active rows and create misleading periods. The explicit flag makes
+that choice visible.
+
+After import, run:
+
+```powershell
+.\scripts\refresh_index_membership.ps1 -Universe nifty_50
+```
+
+That re-adds the latest official snapshot as the current open-ended period.

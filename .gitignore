@@ -56,6 +56,9 @@ data/universe/*.csv
 !data/cache/.gitkeep
 !data/universe/.gitkeep
 !data/universe/README.md
+!data/universe/history/
+!data/universe/history/**/
+!data/universe/history/**/README.md
 *.parquet
 *.feather
 *.pkl
