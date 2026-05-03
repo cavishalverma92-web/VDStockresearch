@@ -15,6 +15,7 @@ from stock_platform.analytics.backtest.signal_backtest import (
     TradeResult,
     _compute_summaries,
     compute_portfolio_metrics,
+    filter_events_by_index_membership,
     portfolio_metrics_to_frame,
     run_signal_backtest,
     run_walk_forward_validation,
@@ -217,6 +218,43 @@ def test_signal_backtest_can_filter_by_point_in_time_index_membership():
 
     assert [trade.symbol for trade in trades] == ["RELIANCE.NS"]
     assert summaries[0].total_trades == 1
+
+
+def test_filter_events_by_index_membership_returns_excludable_frame():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    events = _make_events(
+        [
+            {
+                "symbol": "RELIANCE.NS",
+                "signal": "MA Stack",
+                "event_date": date(2026, 5, 3),
+                "active": True,
+                "close": 100.0,
+            },
+            {
+                "symbol": "OLD.NS",
+                "signal": "MA Stack",
+                "event_date": date(2026, 5, 3),
+                "active": True,
+                "close": 100.0,
+            },
+        ]
+    )
+
+    with Session(engine) as session:
+        sync_index_membership_snapshot(
+            session,
+            index_name="Nifty 50",
+            constituents=pd.DataFrame({"Symbol": ["RELIANCE"], "Series": ["EQ"]}),
+            effective_date=date(2026, 5, 3),
+        )
+        session.commit()
+
+        filtered = filter_events_by_index_membership(events, session, "Nifty 50")
+
+    assert filtered["symbol"].tolist() == ["RELIANCE.NS"]
+    assert len(events) - len(filtered) == 1
 
 
 # ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@ import streamlit as st
 
 from stock_platform.analytics.backtest import (
     compute_portfolio_metrics,
+    filter_events_by_index_membership,
     portfolio_metrics_to_frame,
     run_signal_backtest,
     run_walk_forward_validation,
@@ -14,6 +15,8 @@ from stock_platform.analytics.backtest import (
 )
 from stock_platform.analytics.signals.audit import fetch_signal_event_export
 from stock_platform.data.providers import YahooFinanceProvider
+from stock_platform.db import get_engine, get_session
+from stock_platform.ops import build_data_health_report
 from stock_platform.ui.components.layout import render_page_shell
 
 render_page_shell(
@@ -23,13 +26,52 @@ render_page_shell(
 
 symbol = st.text_input("Optional symbol filter", value="")
 holding_days = st.select_slider("Holding period", options=[5, 10, 20, 60], value=20)
+membership_filter = st.checkbox(
+    "Filter by Nifty 50 membership on signal date",
+    value=False,
+    help=(
+        "Use the index_membership_history table so signals are tested only when the stock "
+        "belonged to Nifty 50 on that signal date."
+    ),
+)
 scope_symbol = symbol.strip().upper() or None
+health_report = build_data_health_report()
+membership = health_report.index_membership_coverage
+
+if membership_filter:
+    if membership is None or membership.active_members == 0:
+        st.error(
+            "No active Nifty 50 membership snapshot is available yet. Run "
+            "`scripts\\refresh_index_membership.ps1 -Universe nifty_50` first."
+        )
+    elif membership.warning:
+        st.warning(membership.warning)
+    st.caption(
+        "Membership-aware backtests reduce survivorship bias. Full historical accuracy still "
+        "depends on importing archived index constituent files."
+    )
 
 if st.button("Run backtest", type="primary"):
     events = fetch_signal_event_export(symbol=scope_symbol, active_only=True)
     if events.empty:
         st.info("No active signal events saved yet. Open Stock Research for a few symbols first.")
         st.stop()
+    original_event_count = len(events)
+    excluded_event_count = 0
+    if membership_filter:
+        if membership is None or membership.active_members == 0:
+            st.stop()
+        engine = get_engine()
+        with get_session(engine) as session:
+            events = filter_events_by_index_membership(events, session, "Nifty 50")
+        excluded_event_count = original_event_count - len(events)
+        st.info(
+            f"Nifty 50 membership filter excluded {excluded_event_count} of "
+            f"{original_event_count} active signal event(s)."
+        )
+        if events.empty:
+            st.warning("No signal events remain after the Nifty 50 membership filter.")
+            st.stop()
     provider = YahooFinanceProvider()
     trades, summaries = run_signal_backtest(
         events, price_provider=provider, holding_days=holding_days

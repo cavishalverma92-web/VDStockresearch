@@ -593,3 +593,12 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
   - Smoke-tested default dry-run with no archived files: failed safely with a beginner-readable message and changed nothing.
   - Focused tests passed: 19 tests passed across importer, index membership repository, and data health.
   - Targeted Ruff checks and format checks passed.
+- **Backtests survivorship-bias filter completed (2026-05-03)**:
+  - Backtests page now has a `Filter by Nifty 50 membership on signal date` checkbox.
+  - When enabled, active signal events are filtered through `index_membership_history` before return calculations.
+  - The page reports how many active signal events were excluded by the membership filter.
+  - The page warns when historical membership backfill is still pending.
+  - `filter_events_by_index_membership` is now a public backtest helper and is reused by `run_signal_backtest`.
+  - Focused tests passed: 29 tests passed across signal backtest, index membership repository, and data health.
+  - Backtests Streamlit AppTest passed with 0 exceptions and 0 rendered errors.
+  - Targeted Ruff checks and format checks passed.

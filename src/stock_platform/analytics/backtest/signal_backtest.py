@@ -111,7 +111,7 @@ def run_signal_backtest(
     if events is None or events.empty:
         return [], []
 
-    events = _filter_events_by_membership(events, membership_session, index_name)
+    events = filter_events_by_index_membership(events, membership_session, index_name)
     if events.empty:
         return [], []
 
@@ -389,7 +389,7 @@ def portfolio_metrics_to_frame(metrics: PortfolioBacktestMetrics) -> pd.DataFram
     )
 
 
-def _filter_events_by_membership(
+def filter_events_by_index_membership(
     events: pd.DataFrame,
     membership_session: Session | None,
     index_name: str | None,
