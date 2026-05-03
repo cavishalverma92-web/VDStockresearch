@@ -36,10 +36,12 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from stock_platform.analytics.adjustments import apply_split_adjustment
+from stock_platform.analytics.fundamentals.summary import build_fundamentals_summary
 from stock_platform.analytics.scanner.universe_scanner import load_universe
 from stock_platform.analytics.signals import scan_technical_signals
 from stock_platform.analytics.technicals import add_technical_indicators
 from stock_platform.data.providers.corporate_actions import get_splits as default_splits_fetcher
+from stock_platform.data.providers.db_fundamentals import DbFundamentalsProvider
 from stock_platform.data.providers.market_data_provider import MarketDataProvider
 from stock_platform.data.repositories import (
     complete_refresh_run,
@@ -169,6 +171,8 @@ def refresh_eod_candles(
     provider = market_data_provider or MarketDataProvider()
     end = end_date or date.today()
 
+    fundamentals_by_symbol = _load_fundamentals_for_universe(symbols, active_engine)
+
     log.info(
         "refresh_eod_candles started universe={} symbols={} dry_run={}",
         universe_name,
@@ -205,6 +209,7 @@ def refresh_eod_candles(
             incremental_overlap_days=incremental_overlap_days,
             dry_run=dry_run,
             splits_fetcher=splits_fetcher,
+            fundamentals_row=fundamentals_by_symbol.get(symbol.strip().upper()),
         )
         outcomes.append(outcome)
         if outcome.error is not None:
@@ -285,6 +290,7 @@ def _refresh_one(
     incremental_overlap_days: int,
     dry_run: bool,
     splits_fetcher: Callable[[str], pd.DataFrame] | None,
+    fundamentals_row: dict | None = None,
 ) -> SymbolRefreshOutcome:
     started = time.perf_counter()
     cleaned = symbol.strip().upper()
@@ -379,6 +385,7 @@ def _refresh_one(
                 symbol=cleaned,
                 enriched=enriched,
                 source=source,
+                fundamentals_row=fundamentals_row,
             )
 
         return SymbolRefreshOutcome(
@@ -423,6 +430,7 @@ def _persist_latest_composite_score(
     symbol: str,
     enriched: pd.DataFrame,
     source: str,
+    fundamentals_row: dict | None = None,
 ) -> tuple[float | None, bool]:
     """Compute and persist the composite score for the latest indicator bar.
 
@@ -441,7 +449,7 @@ def _persist_latest_composite_score(
 
         composite = score_stock(
             symbol=symbol,
-            fundamentals=None,
+            fundamentals=fundamentals_row,
             technicals=latest_row,
             signals=signals,
             delivery=None,
@@ -459,6 +467,40 @@ def _persist_latest_composite_score(
     except Exception as exc:
         log.warning("composite score persist failed for {}: {}", symbol, exc)
         return None, False
+
+
+def _load_fundamentals_for_universe(
+    symbols: list[str],
+    engine: Engine,
+) -> dict[str, dict]:
+    """Build a {symbol → summary-row dict} map for composite scoring.
+
+    Reads from the persisted fundamentals tables (no live yfinance fallback —
+    we don't want the EOD job to spend hours hitting the network for thousands
+    of symbols; a separate ``refresh_fundamentals`` job populates the cache).
+    Sector-rank columns are computed across the universe so per-symbol scores
+    can use peer-relative percentile ranks where available.
+
+    On any failure or empty result the function returns an empty dict — the
+    EOD job continues to score on technicals + signals alone.
+    """
+    if not symbols:
+        return {}
+    try:
+        provider = DbFundamentalsProvider(fallback=None, engine=engine)
+        summary = build_fundamentals_summary(provider, symbols)
+    except Exception as exc:
+        log.warning("fundamentals lookup failed; scoring will skip fundamentals: {}", exc)
+        return {}
+    if summary is None or summary.empty or "symbol" not in summary.columns:
+        return {}
+    out: dict[str, dict] = {}
+    for record in summary.to_dict(orient="records"):
+        sym = str(record.get("symbol") or "").strip().upper()
+        if not sym or record.get("status") == "no_data":
+            continue
+        out[sym] = record
+    return out
 
 
 def _sync_splits(

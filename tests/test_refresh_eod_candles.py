@@ -473,6 +473,66 @@ def test_refresh_skips_composite_score_when_history_too_short(engine) -> None:
         assert session.query(CompositeScoreSnapshot).count() == 0
 
 
+def test_refresh_uses_persisted_fundamentals_in_composite(engine) -> None:
+    """When fundamentals are cached in the DB, composite scoring picks them up."""
+    from stock_platform.data.repositories.fundamentals import (
+        upsert_fundamentals_annual,
+    )
+
+    # Populate two years so growth/Piotroski can compute.
+    fundamentals = pd.DataFrame(
+        {
+            "fiscal_year": [2024, 2025],
+            "revenue": [1_000_000.0, 1_200_000.0],
+            "net_income": [100_000.0, 150_000.0],
+            "total_assets": [5_000_000.0, 5_500_000.0],
+            "total_liabilities": [2_000_000.0, 1_900_000.0],
+            "current_assets": [1_500_000.0, 1_700_000.0],
+            "current_liabilities": [700_000.0, 650_000.0],
+            "shares_outstanding": [10_000.0, 10_000.0],
+            "operating_cash_flow": [120_000.0, 180_000.0],
+            "ebitda": [200_000.0, 240_000.0],
+            "ebit": [180_000.0, 220_000.0],
+            "eps": [10.0, 15.0],
+            "book_value": [3_000_000.0, 3_600_000.0],
+            "debt": [500_000.0, 450_000.0],
+            "cash_and_equivalents": [200_000.0, 300_000.0],
+            "retained_earnings": [800_000.0, 950_000.0],
+            "free_cash_flow": [80_000.0, 130_000.0],
+            "capital_expenditure": [40_000.0, 50_000.0],
+            "market_cap": [None, 50_000_000.0],
+        }
+    )
+    with Session(engine) as session:
+        upsert_fundamentals_annual(session, "RELIANCE.NS", fundamentals, source="yfinance")
+        session.commit()
+
+    summary = refresh_eod_candles(
+        universe=["RELIANCE.NS"],
+        market_data_provider=_FakeRouter(),
+        engine=engine,
+        end_date=date(2026, 5, 1),
+        initial_history_days=180,
+        splits_fetcher=_no_splits,
+    )
+
+    outcome = summary.outcomes[0]
+    assert outcome.error is None
+    assert outcome.composite_score_saved is True
+
+    with Session(engine) as session:
+        row = (
+            session.query(CompositeScoreSnapshot)
+            .filter(CompositeScoreSnapshot.symbol == "RELIANCE.NS")
+            .one()
+        )
+    # Fundamentals were available — they should NOT be in missing_data, and
+    # the fundamentals sub-score should reflect the real input (not the 50.0
+    # default when fundamentals are None).
+    assert '"fundamentals"' not in row.missing_data_json
+    assert row.fundamentals_score is not None
+
+
 def test_refresh_dry_run_does_not_persist_composite_score(engine) -> None:
     router = _FakeRouter()
     summary = refresh_eod_candles(
