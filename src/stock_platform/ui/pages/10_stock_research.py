@@ -174,12 +174,27 @@ with tab_overview:
 
 with tab_chart:
     st.subheader("Interactive Chart")
-    o1, o2, o3, o4 = st.columns(4)
-    show_20 = o1.checkbox("20 EMA", value=False)
-    show_200 = o2.checkbox("200 EMA", value=False)
-    show_bb = o3.checkbox("Bollinger Bands", value=False)
-    show_52w = o4.checkbox("52W levels", value=False)
+    st.caption(
+        "Default view is candlesticks, volume, and 50 EMA. Add overlays only when you need them."
+    )
+    o1, o2, o3, o4, o5 = st.columns(5)
+    show_volume = o1.checkbox("Volume", value=True)
+    show_20 = o2.checkbox("20 EMA", value=False)
+    show_200 = o3.checkbox("200 EMA", value=False)
+    show_bb = o4.checkbox("Bollinger Bands", value=False)
+    show_52w = o5.checkbox("52W levels", value=False)
     active_signals = [signal for signal in ctx.signals if signal.active]
+    event_markers = (
+        [
+            {"date": date, "label": "Result"}
+            for date in earnings_hist["earnings_date"].dropna().tail(4)
+        ]
+        if not earnings_hist.empty and "earnings_date" in earnings_hist.columns
+        else []
+    )
+    upcoming = get_upcoming_earnings(symbol)
+    if upcoming and upcoming.get("earnings_date"):
+        event_markers.append({"date": upcoming["earnings_date"], "label": "Upcoming result"})
     fig = build_price_chart(
         df,
         ctx.technical_df,
@@ -189,7 +204,10 @@ with tab_chart:
         show_200_ema=show_200,
         show_bollinger=show_bb,
         show_52w=show_52w,
+        show_volume=show_volume,
         active_signals=active_signals,
+        event_markers=event_markers,
+        freshness_note="fallback used" if ctx.fallback_reason else None,
     )
     st.plotly_chart(fig, width="stretch")
 
@@ -301,7 +319,6 @@ with tab_flows:
         )
         fig.update_layout(height=320, margin=dict(l=10, r=10, t=30, b=20))
         st.plotly_chart(fig, width="stretch")
-    upcoming = get_upcoming_earnings(symbol)
     days_left = days_to_next_earnings(upcoming)
     if upcoming:
         st.warning(f"Next earnings: {upcoming['earnings_date']} ({days_left} days away)")

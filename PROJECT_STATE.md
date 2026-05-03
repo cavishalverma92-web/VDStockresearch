@@ -602,3 +602,14 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
   - Focused tests passed: 29 tests passed across signal backtest, index membership repository, and data health.
   - Backtests Streamlit AppTest passed with 0 exceptions and 0 rendered errors.
   - Targeted Ruff checks and format checks passed.
+- **Default stock chart cleanup completed (2026-05-03)**:
+  - Stock Research chart now defaults to a readable view: candlesticks, a separate volume panel, and 50 EMA only.
+  - Optional overlays remain available but off by default: 20 EMA, 200 EMA, Bollinger Bands, and 52-week levels.
+  - Active signal context is drawn only when a signal is active: entry zone, stop-loss, and target.
+  - Earnings/result markers are conditional and limited to the upcoming result plus the latest historical result markers.
+  - Chart subtitle now shows source/freshness context in plain ASCII text, such as provider, last bar date, interval, and fallback status.
+  - Fixed a circular import edge case by importing the OHLCV validator directly in the market-data provider router.
+  - Focused tests passed: 7 tests across chart component and market-data provider fallback behavior.
+  - Stock Research Streamlit AppTest passed with 0 exceptions and 0 rendered errors.
+  - Streamlit router AppTest passed with 0 exceptions and 0 rendered errors.
+  - Targeted Ruff checks and format checks passed.

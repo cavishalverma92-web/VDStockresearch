@@ -15,7 +15,7 @@ from stock_platform.auth import load_kite_access_token
 from stock_platform.config import get_settings
 from stock_platform.data.providers.kite_provider import KiteProvider
 from stock_platform.data.providers.yahoo import YahooFinanceProvider
-from stock_platform.data.validators import validate_ohlcv
+from stock_platform.data.validators.ohlcv_validator import validate_ohlcv
 from stock_platform.utils.logging import get_logger
 
 log = get_logger(__name__)
