@@ -16,6 +16,7 @@ from stock_platform.analytics.fundamentals import (
     calculate_basic_ratios,
     calculate_growth,
     calculate_piotroski_f_score,
+    calculate_quarterly_growth,
     compute_multi_year_cagr,
     is_financial_sector,
 )
@@ -27,6 +28,7 @@ from stock_platform.data.providers.corporate_actions import (
     get_earnings_history,
     get_upcoming_earnings,
 )
+from stock_platform.data.providers.db_fundamentals import DbFundamentalsProvider
 from stock_platform.data.providers.nse import fetch_delivery_data
 from stock_platform.ops import build_data_trust_rows, data_trust_level, data_trust_rows_to_frame
 from stock_platform.scoring import score_stock
@@ -69,7 +71,11 @@ with c2:
     render_sparkline(df["close"].tail(60), color=spark_color, height=64)
     st.caption("Close · last 60 bars")
 with c3:
-    st.metric("Last bar", df.index[-1].strftime("%Y-%m-%d"), help=f"{len(df):,} rows · {ctx.price_provider_label}")
+    st.metric(
+        "Last bar",
+        df.index[-1].strftime("%Y-%m-%d"),
+        help=f"{len(df):,} rows · {ctx.price_provider_label}",
+    )
 
 if ctx.fallback_reason:
     st.warning(ctx.fallback_reason)
@@ -94,18 +100,21 @@ with st.expander(dq_label, expanded=bool(error_count)):
 settings = get_settings()
 starter = get_universe_config().get("starter_watchlist", ["RELIANCE.NS"])
 yf_provider = YFinanceFundamentalsProvider()
+db_provider = DbFundamentalsProvider(fallback=yf_provider)
 csv_provider = CsvFundamentalsProvider(
     annual_path=resolve_project_path(settings.fundamentals_csv_path)
 )
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def _yf_has_fundamentals(sym: str) -> bool:
-    return not yf_provider.get_annual_fundamentals(sym).empty
+def _db_or_yf_has_fundamentals(sym: str) -> bool:
+    return not db_provider.get_annual_fundamentals(sym).empty
 
 
-fundamentals_provider = yf_provider if _yf_has_fundamentals(symbol) else csv_provider
-fund_source = "yfinance (live)" if fundamentals_provider is yf_provider else "local CSV (sample)"
+fundamentals_provider = db_provider if _db_or_yf_has_fundamentals(symbol) else csv_provider
+fund_source = (
+    "DB (yfinance-cached)" if fundamentals_provider is db_provider else "local CSV (sample)"
+)
 summary_symbols = unique_symbols([*starter, symbol])
 summary_frame = build_fundamentals_summary(fundamentals_provider, summary_symbols)
 selected_summary = None
@@ -279,6 +288,28 @@ with tab_fund:
             width="stretch",
             hide_index=True,
         )
+        get_q = getattr(fundamentals_provider, "get_quarterly_snapshots", None)
+        q_snaps = get_q(symbol) if callable(get_q) else []
+        if q_snaps:
+            st.markdown("##### Quarterly trend")
+            q_growth = calculate_quarterly_growth(q_snaps)
+            q1, q2, q3, q4 = st.columns(4)
+            q1.metric("Revenue QoQ", format_pct(q_growth.get("revenue_qoq")))
+            q2.metric("Revenue YoY", format_pct(q_growth.get("revenue_yoy")))
+            q3.metric("PAT YoY", format_pct(q_growth.get("net_income_yoy")))
+            q4.metric("EPS YoY", format_pct(q_growth.get("eps_yoy")))
+            tail = q_snaps[-8:]
+            tail_index = [f"FY{s.fiscal_year}Q{s.fiscal_quarter}" for s in tail]
+            revenue_series = pd.Series([s.revenue for s in tail], index=tail_index, dtype="float64")
+            if revenue_series.notna().any():
+                render_sparkline(revenue_series, color="#2563EB", height=56)
+                st.caption("Revenue · last 8 quarters")
+            with st.expander("Quarterly fundamentals rows"):
+                st.dataframe(
+                    fundamentals_provider.get_quarterly_fundamentals(symbol),
+                    width="stretch",
+                )
+
         with st.expander("Annual fundamentals rows"):
             st.dataframe(fundamentals_frame, width="stretch")
 
@@ -298,7 +329,8 @@ with tab_tech:
         rsi_series = ctx.technical_df["rsi_14"].tail(60)
         latest_rsi = rsi_series.dropna().iloc[-1] if not rsi_series.dropna().empty else None
         rsi_color = (
-            "#EF4444" if latest_rsi is not None and (latest_rsi >= 70 or latest_rsi <= 30)
+            "#EF4444"
+            if latest_rsi is not None and (latest_rsi >= 70 or latest_rsi <= 30)
             else "#2563EB"
         )
         render_sparkline(rsi_series, color=rsi_color, height=56)
