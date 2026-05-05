@@ -32,7 +32,7 @@
 
 ---
 
-## Phase 1 - Fundamentals Engine (MVP complete / real source pending)
+## Phase 1 - Fundamentals Engine (strong MVP complete / source policy pending)
 
 **Goal:** Ingest and display fundamental data for an initial equity universe.
 
@@ -43,6 +43,13 @@
 - Fundamental dashboard + stock drill-down
 - Sector-relative ranking
 - Missing-data warnings everywhere
+- DB-backed annual and quarterly fundamentals cache
+- yfinance fallback
+- Screener parser foundation and refresh-job source option
+- Cross-source disagreement checks
+- Market-cap reconstruction from price history when share-count data exists
+
+**Remaining gaps:** choose a reliable long-term Indian fundamentals source, review ToS/licensing, and avoid scaled scraping before source policy is settled.
 
 **Exit criteria:** sortable table of stocks with fundamental metrics; click-through drill-down with source + freshness visible.
 
@@ -146,9 +153,7 @@
 - [x] Bank-safe UI handling for industrial ratios that are not applicable
 - [x] Financial-sector branch in composite fundamentals scoring
 
-**Remaining gaps:** yfinance coverage is uneven for Indian stocks; verified official / paid
-fundamentals source still needs ToS and reliability review. Bank-specific fields
-such as NIM, GNPA, NNPA, CASA, and capital adequacy still need a better source.
+**Remaining gaps:** yfinance coverage is uneven for Indian stocks; Screener parser foundation exists but needs careful source-policy/ToS review before scaled use. Bank-specific fields such as NIM, GNPA, NNPA, CASA, and capital adequacy still need a better official/manual source.
 
 ---
 

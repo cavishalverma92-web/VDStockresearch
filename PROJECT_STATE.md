@@ -315,7 +315,7 @@
 - [x] Zerodha Kite Connect market-data foundation added: Kite-preferred router, yfinance fallback, instrument metadata, LTP/OHLC/quote methods, historical candles, and safe auth setup
 - [x] Zerodha API Setup moved to a directly reachable standalone section in the Streamlit UI
 - [x] Priority 1 multi-page Streamlit split started: Market Today, Stock Research, Top Opportunities, Watchlist, Backtests, Data Health, and Settings pages
-- [ ] Initial commit pushed to private GitHub repo
+- [x] GitHub remote connected and recent verified commits pushed to `main`
 
 ---
 
@@ -323,7 +323,7 @@
 
 - PowerShell `CurrentUser` execution policy could not be changed in this environment; use process-scoped policy or run the app through `.venv\Scripts\python.exe -m streamlit ...`.
 - Running `.ps1` scripts directly may be blocked by Windows execution policy. Use a temporary process-only bypass when needed: `powershell -ExecutionPolicy Bypass -File .\scripts\health_check.ps1`.
-- Local Git repository is initialized, but no private GitHub remote is connected yet.
+- GitHub remote is connected. Keep `.env`, local database files, Kite tokens, raw provider caches, and user-specific data out of Git.
 
 ---
 
@@ -333,9 +333,11 @@
 |---|---|---|---|
 | Zerodha Kite Connect | preferred when configured | Market data + instrument metadata | Preferred provider for instrument master, token mapping, historical candles, LTP, OHLC, and quotes. No holdings, positions, funds, margins, orders, trades, or profile display are enabled. |
 | yfinance | connected fallback | OHLCV prices | Used automatically when Kite is not configured, token is missing/expired, Kite fails, instrument token is missing, validation fails, or `MARKET_DATA_PROVIDER=yfinance`. |
-| local CSV | connected | Fundamentals sample/template | Safe Phase 1 bridge; current sample rows are placeholders, not verified source data |
+| local SQLite DB | connected | Persisted fundamentals cache | `fundamentals_annual` and `fundamentals_quarterly` store source-tagged rows from refresh jobs |
+| yfinance | connected fallback | Fundamentals | Used for live/cache fallback; Indian coverage can be incomplete and must show missing-data warnings |
+| local CSV | connected | Fundamentals sample/template | Safe fallback bridge; sample rows are placeholders, not verified source data |
 | NSE equity API | connected | Delivery %, bulk/block deals | Phase 3; requires live network + browser-like session |
-| Screener.in | not yet | Fundamentals | Phase 1; verify ToS before connecting |
+| Screener.in | foundation implemented | Fundamentals | Parser and refresh source exist; use carefully, dry-run first, and verify ToS before scaled or redistributed use |
 | AMFI | not yet | MF holdings | Phase 4 |
 | SEBI PIT | not yet | Insider trades | Phase 4 |
 
@@ -345,7 +347,7 @@
 
 - **Target**: PostgreSQL 16+ (managed: Supabase or Neon for production)
 - **Current**: SQLite fallback path configured through `DATABASE_URL`
-- **Phase 1 status**: stock universe and fundamentals schema foundation added; migrations and real provider still pending
+- **Phase 1 status**: fundamentals schema, DB-backed cache, yfinance fallback, Screener parser foundation, quarterly rows, cross-source checks, and refresh job are implemented. Commercial/source reliability review is still pending.
 - **Phase 2 status**: signal audit rows are saved to local SQLite at `data/stock_platform.db`; repeated same-day scans are upserted instead of duplicated
 - **Phase 8.1 status**: universe scanner runs and per-symbol results are saved to local SQLite in `universe_scan_runs` and `universe_scan_results`
 - **Phase 8.2 status**: local research shortlist rows are saved in `research_watchlist_items`
@@ -354,7 +356,7 @@
 
 ## Known limitations
 
-- Fundamentals provider currently uses local CSV sample/template data only; real source selection and ToS review pending
+- Fundamentals now use a DB-backed cache with yfinance fallback and a Screener parser foundation. The remaining limitation is source reliability and legal/ToS review, especially before scaled use or external redistribution.
 - Phase 2 signals are educational pattern observations only; no backtest or recommendation engine yet
 - NSE delivery % and bulk/block deal APIs require live network and may fail if NSE blocks automated requests; UI degrades gracefully to "data unavailable" messages
 - Composite scoring, entry-zone, stop-loss, target-zone, risk/reward, and position-sizing MVPs exist; they remain educational approximations until validated with real data and backtests
@@ -613,3 +615,10 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
   - Stock Research Streamlit AppTest passed with 0 exceptions and 0 rendered errors.
   - Streamlit router AppTest passed with 0 exceptions and 0 rendered errors.
   - Targeted Ruff checks and format checks passed.
+- **Fundamentals state/docs cleanup completed (2026-05-06)**:
+  - Updated `PROJECT_STATE.md`, `docs/master_prompt_audit.md`, and `docs/phases.md` so they reflect the current DB-backed fundamentals cache, yfinance fallback, Screener parser foundation, quarterly fundamentals, cross-source checks, and market-cap reconstruction.
+  - Added beginner guide `docs/FUNDAMENTALS_REFRESH.md`.
+  - Verified the safe dry-run command with the project virtual environment:
+    `.\.venv\Scripts\python.exe -m stock_platform.jobs.refresh_fundamentals --universe nifty_50 --source yfinance --max-symbols 3 --dry-run`.
+  - Dry-run result: 3 symbols successful, 0 failed, 12 annual rows and 16 quarterly rows found; database was not changed.
+  - Remaining fundamentals gap: choose a durable Indian fundamentals source policy and complete source ToS/reliability review before scaled use.
