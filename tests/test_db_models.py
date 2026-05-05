@@ -13,6 +13,8 @@ from stock_platform.db.models import (
     FundamentalsQuarterly,
     IndexMembershipHistory,
     StockUniverse,
+    StrategyScanResult,
+    StrategyScanRun,
 )
 
 
@@ -110,3 +112,44 @@ def test_index_membership_history_table_can_be_created() -> None:
         assert stored.index_name == "Nifty 50"
         assert stored.active is True
         assert stored.to_date is None
+
+
+def test_strategy_scan_tables_can_be_created() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        run = StrategyScanRun(
+            universe_name="nifty_50",
+            requested_symbols=50,
+            scanned_symbols=48,
+            failed_symbols=2,
+            result_count=1,
+            source="persisted_eod",
+        )
+        session.add(run)
+        session.flush()
+        session.add(
+            StrategyScanResult(
+                run_id=run.id,
+                symbol="RELIANCE.NS",
+                strategy="EMA Stack Trend Filter",
+                setup_type="Trend",
+                signal_date=date(2026, 5, 1),
+                close=1400.0,
+                data_source="kite",
+                confidence_score=82.0,
+                why_this_appeared="EMA stack is aligned.",
+                key_risk="Trend filters can appear late.",
+            )
+        )
+        session.commit()
+
+    with Session(engine) as session:
+        stored = session.scalar(
+            select(StrategyScanRun).where(StrategyScanRun.universe_name == "nifty_50")
+        )
+        assert stored is not None
+        assert stored.result_count == 1
+        assert len(stored.results) == 1
+        assert stored.results[0].strategy == "EMA Stack Trend Filter"

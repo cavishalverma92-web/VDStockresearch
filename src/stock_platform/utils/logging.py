@@ -53,7 +53,7 @@ def _setup() -> None:
     )
 
     # Rolling app log
-    logger.add(
+    _add_file_handler(
         LOGS_DIR / "app.log",
         level="DEBUG",
         rotation="10 MB",
@@ -65,7 +65,7 @@ def _setup() -> None:
     )
 
     # Data-quality log — only records tagged with extra={"dq": True}
-    logger.add(
+    _add_file_handler(
         LOGS_DIR / "data_quality.log",
         level="INFO",
         rotation="10 MB",
@@ -74,7 +74,7 @@ def _setup() -> None:
         filter=lambda record: record["extra"].get("dq") is True,
     )
 
-    logger.add(
+    _add_file_handler(
         LOGS_DIR / "backtests.log",
         level="INFO",
         rotation="10 MB",
@@ -85,6 +85,16 @@ def _setup() -> None:
 
     _CONFIGURED = True
     logger.debug("Logger configured. Logs directory: {}", LOGS_DIR)
+
+
+def _add_file_handler(*args, **kwargs) -> None:
+    """Add a file logger, falling back when queued logging is blocked."""
+    try:
+        logger.add(*args, **kwargs)
+    except PermissionError:
+        fallback_kwargs = dict(kwargs)
+        fallback_kwargs["enqueue"] = False
+        logger.add(*args, **fallback_kwargs)
 
 
 def get_logger(name: str | None = None):

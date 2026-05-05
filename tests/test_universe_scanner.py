@@ -141,7 +141,7 @@ def test_scan_results_to_frame_with_rows():
 
 
 # ---------------------------------------------------------------------------
-# scan_universe — mocked yfinance fetch + composite score
+# scan_universe — mocked market-data router fetch + composite score
 # ---------------------------------------------------------------------------
 
 
@@ -167,7 +167,7 @@ def _make_synthetic_ohlcv(days: int = 300, base: float = 100.0) -> pd.DataFrame:
     )
 
 
-@patch("stock_platform.analytics.scanner.universe_scanner.YahooFinanceProvider")
+@patch("stock_platform.analytics.scanner.universe_scanner.MarketDataProvider")
 def test_scan_universe_returns_one_row_per_symbol(mock_provider_cls):
     instance = mock_provider_cls.return_value
     instance.get_ohlcv.return_value = _make_synthetic_ohlcv()
@@ -184,7 +184,7 @@ def test_scan_universe_returns_one_row_per_symbol(mock_provider_cls):
     assert all(r.composite_score is not None for r in results)
 
 
-@patch("stock_platform.analytics.scanner.universe_scanner.YahooFinanceProvider")
+@patch("stock_platform.analytics.scanner.universe_scanner.MarketDataProvider")
 def test_scan_universe_sorts_errors_to_bottom(mock_provider_cls):
     instance = mock_provider_cls.return_value
 
@@ -201,7 +201,7 @@ def test_scan_universe_sorts_errors_to_bottom(mock_provider_cls):
     assert results[-1].error is not None
 
 
-@patch("stock_platform.analytics.scanner.universe_scanner.YahooFinanceProvider")
+@patch("stock_platform.analytics.scanner.universe_scanner.MarketDataProvider")
 def test_scan_universe_progress_callback_invoked(mock_provider_cls):
     instance = mock_provider_cls.return_value
     instance.get_ohlcv.return_value = _make_synthetic_ohlcv()
@@ -223,10 +223,10 @@ def test_scan_universe_progress_callback_invoked(mock_provider_cls):
     assert calls[-1][1] == 2
 
 
-@patch("stock_platform.analytics.scanner.universe_scanner.YahooFinanceProvider")
+@patch("stock_platform.analytics.scanner.universe_scanner.MarketDataProvider")
 def test_scan_universe_handles_provider_exception(mock_provider_cls):
     instance = mock_provider_cls.return_value
-    instance.get_ohlcv.side_effect = RuntimeError("yfinance offline")
+    instance.get_ohlcv.side_effect = RuntimeError("market data offline")
 
     results = scan_universe(["A.NS"], lookback_days=300, max_workers=1)
     assert len(results) == 1
@@ -234,7 +234,7 @@ def test_scan_universe_handles_provider_exception(mock_provider_cls):
     assert results[0].error is not None
 
 
-@patch("stock_platform.analytics.scanner.universe_scanner.YahooFinanceProvider")
+@patch("stock_platform.analytics.scanner.universe_scanner.MarketDataProvider")
 def test_scan_universe_stops_on_data_quality_error(mock_provider_cls):
     instance = mock_provider_cls.return_value
     broken = _make_synthetic_ohlcv().drop(columns=["adj_close"])
@@ -247,7 +247,7 @@ def test_scan_universe_stops_on_data_quality_error(mock_provider_cls):
     assert "data quality failure" in str(results[0].error)
 
 
-@patch("stock_platform.analytics.scanner.universe_scanner.YahooFinanceProvider")
+@patch("stock_platform.analytics.scanner.universe_scanner.MarketDataProvider")
 def test_scan_universe_clamps_invalid_worker_count(mock_provider_cls):
     instance = mock_provider_cls.return_value
     instance.get_ohlcv.return_value = _make_synthetic_ohlcv()
@@ -262,7 +262,7 @@ def test_scan_universe_empty_input():
     assert scan_universe([], lookback_days=100) == []
 
 
-@patch("stock_platform.analytics.scanner.universe_scanner.YahooFinanceProvider")
+@patch("stock_platform.analytics.scanner.universe_scanner.MarketDataProvider")
 def test_scan_universe_loads_named_universe(mock_provider_cls):
     """When given a string, the scanner should look up the universe in config."""
     instance = mock_provider_cls.return_value

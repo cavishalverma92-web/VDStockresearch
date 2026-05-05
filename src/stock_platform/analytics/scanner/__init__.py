@@ -19,6 +19,22 @@ from stock_platform.analytics.scanner.persistence import (
     save_universe_scan,
     scan_storage_to_frame,
 )
+from stock_platform.analytics.scanner.result_schema import (
+    ADVANCED_STRATEGY_SCAN_COLUMNS,
+    DEFAULT_STRATEGY_SCAN_COLUMNS,
+    StrategyScanResult,
+    strategy_results_to_frame,
+)
+from stock_platform.analytics.scanner.strategy_persistence import (
+    fetch_latest_strategy_scan,
+    save_strategy_scan,
+    strategy_scan_errors,
+    strategy_scan_storage_to_frame,
+)
+from stock_platform.analytics.scanner.strategy_scanner import (
+    StrategyScanSummary,
+    scan_persisted_strategy_universe,
+)
 from stock_platform.analytics.scanner.universe_scanner import (
     ScanResult,
     list_available_universes,
@@ -37,7 +53,11 @@ from stock_platform.analytics.scanner.watchlist import (
 
 __all__ = [
     "DailyResearchBrief",
+    "ADVANCED_STRATEGY_SCAN_COLUMNS",
+    "DEFAULT_STRATEGY_SCAN_COLUMNS",
     "ScanResult",
+    "StrategyScanResult",
+    "StrategyScanSummary",
     "add_symbols_to_watchlist",
     "build_daily_research_brief",
     "compare_latest_universe_scans",
@@ -47,14 +67,20 @@ __all__ = [
     "daily_brief_table",
     "enrich_watchlist_with_latest_scores",
     "fetch_latest_universe_scan",
+    "fetch_latest_strategy_scan",
     "fetch_recent_universe_scans",
     "fetch_watchlist_items",
     "list_available_universes",
     "load_universe",
     "save_universe_scan",
+    "save_strategy_scan",
+    "scan_persisted_strategy_universe",
     "scan_results_to_frame",
     "scan_storage_to_frame",
     "scan_universe",
+    "strategy_results_to_frame",
+    "strategy_scan_errors",
+    "strategy_scan_storage_to_frame",
     "universe_size",
     "update_watchlist_reviews",
     "watchlist_to_frame",

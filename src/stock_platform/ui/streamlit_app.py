@@ -48,6 +48,11 @@ def main() -> None:
                 icon=":material/travel_explore:",
             ),
             st.Page(
+                str(pages_dir / "25_strategy_scanner.py"),
+                title="Strategy Scanner",
+                icon=":material/filter_alt:",
+            ),
+            st.Page(
                 str(pages_dir / "30_watchlist.py"),
                 title="Watchlist",
                 icon=":material/bookmark:",

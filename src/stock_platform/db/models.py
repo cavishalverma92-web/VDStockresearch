@@ -540,6 +540,87 @@ class UniverseScanResult(Base):
     run: Mapped[UniverseScanRun] = relationship(back_populates="results")
 
 
+class StrategyScanRun(Base):
+    """One saved read-only strategy scanner run."""
+
+    __tablename__ = "strategy_scan_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    universe_name: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
+    requested_symbols: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    scanned_symbols: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failed_symbols: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    result_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    min_confidence_filter: Mapped[float | None] = mapped_column(Float)
+    min_rr_filter: Mapped[float | None] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String(80), nullable=False, default="persisted_eod")
+    note: Mapped[str | None] = mapped_column(Text)
+    errors_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    results: Mapped[list[StrategyScanResult]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+    )
+
+
+class StrategyScanResult(Base):
+    """One strategy setup result from a saved scanner run."""
+
+    __tablename__ = "strategy_scan_results"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "symbol",
+            "strategy",
+            "signal_date",
+            name="uq_strategy_scan_result",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey("strategy_scan_runs.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    symbol: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    company_name: Mapped[str | None] = mapped_column(String(255))
+    sector: Mapped[str | None] = mapped_column(String(120), index=True)
+    strategy: Mapped[str] = mapped_column(String(120), index=True, nullable=False)
+    setup_type: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
+    signal_date: Mapped[date] = mapped_column(Date, index=True, nullable=False)
+    close: Mapped[float] = mapped_column(Float, nullable=False)
+    entry_zone_low: Mapped[float | None] = mapped_column(Float)
+    entry_zone_high: Mapped[float | None] = mapped_column(Float)
+    stop_loss: Mapped[float | None] = mapped_column(Float)
+    target_price: Mapped[float | None] = mapped_column(Float)
+    risk_reward: Mapped[float | None] = mapped_column(Float)
+    rsi: Mapped[float | None] = mapped_column(Float)
+    trend_status: Mapped[str | None] = mapped_column(String(40))
+    relative_volume: Mapped[float | None] = mapped_column(Float)
+    atr_pct: Mapped[float | None] = mapped_column(Float)
+    liquidity_status: Mapped[str | None] = mapped_column(String(40), index=True)
+    data_source: Mapped[str] = mapped_column(String(80), nullable=False)
+    data_freshness: Mapped[str | None] = mapped_column(String(40))
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
+    why_this_appeared: Mapped[str] = mapped_column(Text, nullable=False)
+    key_risk: Mapped[str] = mapped_column(Text, nullable=False)
+    data_trust: Mapped[str] = mapped_column(String(40), nullable=False, default="Good data")
+    market_cap_bucket: Mapped[str | None] = mapped_column(String(32), index=True)
+    ema_20: Mapped[float | None] = mapped_column(Float)
+    ema_50: Mapped[float | None] = mapped_column(Float)
+    ema_100: Mapped[float | None] = mapped_column(Float)
+    ema_200: Mapped[float | None] = mapped_column(Float)
+    breakout_level: Mapped[float | None] = mapped_column(Float)
+    avg_traded_value_cr: Mapped[float | None] = mapped_column(Float)
+    warnings_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    provider_fallback_reason: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    run: Mapped[StrategyScanRun] = relationship(back_populates="results")
+
+
 class ResearchWatchlistItem(Base):
     """One symbol saved by the user for follow-up research."""
 

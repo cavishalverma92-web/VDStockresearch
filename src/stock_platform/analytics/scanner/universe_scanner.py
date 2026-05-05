@@ -1,15 +1,15 @@
 """Universe scanner: rank an entire index by composite score in one pass.
 
 For each ticker in a chosen universe, the scanner:
-1. Fetches OHLCV (last `lookback_days` calendar days).
+1. Fetches OHLCV through the Kite-first market-data router.
 2. Computes technical indicators.
 3. Runs the educational signal scanner.
 4. Computes the composite 0–100 research score.
 
 Results are returned as ranked ``ScanResult`` rows. The default scan is
-sequential because yfinance can behave unpredictably under concurrent access.
-Callers may raise ``max_workers`` for experiments, but local daily use should
-prefer reliability over speed.
+sequential because provider fallbacks and external data calls are more reliable
+when kept conservative. Callers may raise ``max_workers`` for experiments, but
+local daily use should prefer reliability over speed.
 
 This is **research support, not investment advice** — the same caveat that
 applies to every other module of the platform.
@@ -28,7 +28,7 @@ import pandas as pd
 from stock_platform.analytics.signals import SignalResult, scan_technical_signals
 from stock_platform.analytics.technicals import add_technical_indicators
 from stock_platform.config import ROOT_DIR, get_universes_config
-from stock_platform.data.providers import YahooFinanceProvider
+from stock_platform.data.providers.market_data_provider import MarketDataProvider
 from stock_platform.data.validators import validate_ohlcv
 from stock_platform.scoring import CompositeScore, score_stock
 from stock_platform.utils.logging import get_logger
@@ -116,8 +116,8 @@ def scan_universe(
         lookback_days: how many calendar days of price history to load.  At
             least ~250 trading days is recommended so 200 EMA and 52W metrics
             populate.
-        max_workers: parallel yfinance threads. Defaults to 1 because yfinance
-            can be unreliable under concurrent access. Keep <= 8 for experiments.
+        max_workers: parallel provider threads. Defaults to 1 for reliability.
+            Keep <= 8 for experiments.
         end_date: defaults to today; useful for deterministic tests.
         progress_callback: optional ``fn(done, total, current_symbol)`` for
             UI progress bars.
@@ -142,7 +142,7 @@ def scan_universe(
 
     def _scan_one(sym: str) -> ScanResult:
         try:
-            provider = YahooFinanceProvider()
+            provider = MarketDataProvider()
             return _scan_single_symbol(sym, provider, start, end)
         except Exception as exc:
             log.warning("Universe scan failed for {}: {}", sym, exc)
@@ -229,7 +229,10 @@ def scan_results_to_frame(results: list[ScanResult]) -> pd.DataFrame:
 
 
 def _scan_single_symbol(
-    symbol: str, provider: YahooFinanceProvider, start: date, end: date
+    symbol: str,
+    provider: MarketDataProvider,
+    start: date,
+    end: date,
 ) -> ScanResult:
     df = provider.get_ohlcv(symbol, start=start, end=end)
     if df is None or df.empty or len(df) < 30:
