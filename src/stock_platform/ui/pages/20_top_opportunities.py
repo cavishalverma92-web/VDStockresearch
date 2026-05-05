@@ -161,9 +161,7 @@ else:
     m1.metric("Run", f"#{brief.latest_run_id}")
     m2.metric("Successful", brief.successful_symbols)
     m3.metric("Failed", brief.failed_symbols)
-    m4.metric(
-        "Avg score", "N/A" if brief.average_score is None else f"{brief.average_score:.1f}"
-    )
+    m4.metric("Avg score", "N/A" if brief.average_score is None else f"{brief.average_score:.1f}")
     m5.metric("Top score", "N/A" if brief.top_score is None else f"{brief.top_score:.1f}")
 
     tabs = st.tabs(["New opportunities", "Score movers", "New signals", "Action queue"])

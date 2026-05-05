@@ -170,9 +170,15 @@ def render_sparkline(values: pd.Series, *, color: str = "#2563EB", height: int =
     if series.empty:
         st.caption("—")
         return
-    fig = go.Figure(go.Scatter(x=list(range(len(series))), y=series.tolist(),
-                               mode="lines", line=dict(color=color, width=1.6),
-                               hoverinfo="y"))
+    fig = go.Figure(
+        go.Scatter(
+            x=list(range(len(series))),
+            y=series.tolist(),
+            mode="lines",
+            line=dict(color=color, width=1.6),
+            hoverinfo="y",
+        )
+    )
     fig.update_layout(
         height=height,
         margin=dict(l=0, r=0, t=2, b=2),
@@ -235,7 +241,7 @@ def render_verdict_card(
             <div>
               <span class="chip">{band}</span>
               <span class="chip {trust_class}">Trust: {trust_level}</span>
-              <span class="chip">{active_signal_count} active signal{'s' if active_signal_count != 1 else ''}</span>
+              <span class="chip">{active_signal_count} active signal{"s" if active_signal_count != 1 else ""}</span>
             </div>
           </div>
         </div>
