@@ -196,6 +196,100 @@ def test_score_stock_flags_weak_manual_banking_metrics() -> None:
     assert any("Credit growth is materially faster" in risk for risk in result.risks)
 
 
+def test_score_stock_blends_institutional_flows_with_delivery() -> None:
+    from stock_platform.analytics.flows.institutional import InstitutionalFlowSnapshot
+
+    bullish_snaps = {
+        "FII": InstitutionalFlowSnapshot(
+            participant="FII",
+            latest_date=None,
+            latest_net_cr=200.0,
+            rolling_5d_net_cr=1000.0,
+            rolling_20d_net_cr=3000.0,
+            trend="bullish",
+        ),
+        "DII": InstitutionalFlowSnapshot(
+            participant="DII",
+            latest_date=None,
+            latest_net_cr=150.0,
+            rolling_5d_net_cr=800.0,
+            rolling_20d_net_cr=2400.0,
+            trend="bullish",
+        ),
+    }
+    bearish_snaps = {
+        "FII": InstitutionalFlowSnapshot(
+            participant="FII",
+            latest_date=None,
+            latest_net_cr=-200.0,
+            rolling_5d_net_cr=-1000.0,
+            rolling_20d_net_cr=-3000.0,
+            trend="bearish",
+        ),
+        "DII": InstitutionalFlowSnapshot(
+            participant="DII",
+            latest_date=None,
+            latest_net_cr=-150.0,
+            rolling_5d_net_cr=-800.0,
+            rolling_20d_net_cr=-2400.0,
+            trend="bearish",
+        ),
+    }
+
+    base_kwargs = dict(
+        symbol="TEST.NS",
+        fundamentals=None,
+        technicals=None,
+        signals=[],
+        delivery={"latest_pct": 50.0, "ma20_pct": 45.0, "trend": "flat"},
+        result_volatility=None,
+        weights=_weights(),
+    )
+
+    bullish = score_stock(institutional_flows=bullish_snaps, **base_kwargs)
+    bearish = score_stock(institutional_flows=bearish_snaps, **base_kwargs)
+
+    # Bullish FII+DII context should pull the flows bucket above the bearish one.
+    assert bullish.sub_scores["flows"] > bearish.sub_scores["flows"]
+    assert any("FII" in r and "bullish" in r.lower() for r in bullish.reasons)
+    assert any("FII" in r and "bearish" in r.lower() for r in bearish.risks)
+
+
+def test_score_stock_works_when_only_institutional_flows_provided() -> None:
+    from stock_platform.analytics.flows.institutional import InstitutionalFlowSnapshot
+
+    snaps = {
+        "FII": InstitutionalFlowSnapshot(
+            participant="FII",
+            latest_date=None,
+            latest_net_cr=200.0,
+            rolling_5d_net_cr=1000.0,
+            rolling_20d_net_cr=3000.0,
+            trend="bullish",
+        ),
+        "DII": InstitutionalFlowSnapshot(
+            participant="DII",
+            latest_date=None,
+            latest_net_cr=200.0,
+            rolling_5d_net_cr=1000.0,
+            rolling_20d_net_cr=3000.0,
+            trend="bullish",
+        ),
+    }
+    result = score_stock(
+        symbol="X",
+        fundamentals=None,
+        technicals=None,
+        signals=[],
+        delivery=None,
+        result_volatility=None,
+        institutional_flows=snaps,
+        weights=_weights(),
+    )
+    # Without delivery the flows bucket should still beat the all-None default.
+    assert result.sub_scores["flows"] > 50.0
+
+
 def test_composite_scores_to_frame_has_expected_columns() -> None:
     result = score_stock(
         symbol="TEST.NS",

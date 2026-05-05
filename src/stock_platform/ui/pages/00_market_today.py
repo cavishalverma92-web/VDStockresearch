@@ -5,7 +5,10 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from stock_platform.analytics.flows import compute_institutional_flow_snapshots
 from stock_platform.data.providers import MarketDataProvider
+from stock_platform.data.repositories import fetch_market_flows
+from stock_platform.db import get_session
 from stock_platform.ops import build_market_today_summary
 from stock_platform.ui.components.common import research_pick_button
 from stock_platform.ui.components.layout import render_page_shell
@@ -99,6 +102,59 @@ with tab_events:
         st.info("No saved upcoming events in the next 5 trading days.")
     else:
         research_pick_button(summary.upcoming_events, key="market_events")
+
+st.divider()
+
+# --- FII / DII institutional flows -------------------------------------------
+st.subheader("Institutional flows")
+st.caption("FII/DII cash market activity from NSE provisional figures.")
+
+try:
+    with get_session() as _flow_session:
+        flows_frame = fetch_market_flows(_flow_session, source="nse")
+except Exception as _exc:  # noqa: BLE001
+    flows_frame = pd.DataFrame()
+    st.warning(f"Could not load institutional flows: {type(_exc).__name__}")
+
+if flows_frame.empty:
+    st.info(
+        "No FII/DII rows persisted yet. Run "
+        "`python -m stock_platform.jobs.refresh_market_flows` to fetch the latest."
+    )
+else:
+    snapshots = compute_institutional_flow_snapshots(flows_frame)
+    fii = snapshots.get("FII")
+    dii = snapshots.get("DII")
+    f1, f2, f3, f4 = st.columns(4)
+    f1.metric(
+        "FII latest net (Cr)",
+        "N/A" if fii is None or fii.latest_net_cr is None else f"{fii.latest_net_cr:+,.0f}",
+        help=f"As of {fii.latest_date.date() if fii and fii.latest_date is not None else 'N/A'}",
+    )
+    f2.metric(
+        "FII 5d net (Cr)",
+        "N/A" if fii is None or fii.rolling_5d_net_cr is None else f"{fii.rolling_5d_net_cr:+,.0f}",
+        delta=None if fii is None else fii.trend.title(),
+    )
+    f3.metric(
+        "DII latest net (Cr)",
+        "N/A" if dii is None or dii.latest_net_cr is None else f"{dii.latest_net_cr:+,.0f}",
+        help=f"As of {dii.latest_date.date() if dii and dii.latest_date is not None else 'N/A'}",
+    )
+    f4.metric(
+        "DII 5d net (Cr)",
+        "N/A" if dii is None or dii.rolling_5d_net_cr is None else f"{dii.rolling_5d_net_cr:+,.0f}",
+        delta=None if dii is None else dii.trend.title(),
+    )
+
+    with st.expander("Recent FII/DII rows"):
+        st.dataframe(
+            flows_frame.tail(20).sort_values(
+                ["trade_date", "participant"], ascending=[False, True]
+            ),
+            width="stretch",
+            hide_index=True,
+        )
 
 st.divider()
 

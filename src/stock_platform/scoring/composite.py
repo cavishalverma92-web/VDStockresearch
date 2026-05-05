@@ -12,6 +12,10 @@ from typing import Any
 
 import pandas as pd
 
+from stock_platform.analytics.flows.institutional import (
+    InstitutionalFlowSnapshot,
+    institutional_flow_score,
+)
 from stock_platform.analytics.fundamentals.sector_policy import is_financial_sector
 from stock_platform.analytics.signals import SignalResult
 from stock_platform.config import get_scoring_weights
@@ -39,6 +43,7 @@ def score_stock(
     signals: list[SignalResult],
     delivery: Mapping[str, Any] | None = None,
     result_volatility: Mapping[str, Any] | None = None,
+    institutional_flows: Mapping[str, InstitutionalFlowSnapshot] | None = None,
     weights: Mapping[str, Any] | None = None,
 ) -> CompositeScore:
     """Build an explainable composite score from available MVP inputs."""
@@ -57,7 +62,7 @@ def score_stock(
             missing,
         ),
         "technicals": _technicals_score(technicals, signals, reasons, risks, missing),
-        "flows": _flows_score(delivery, reasons, risks, missing),
+        "flows": _flows_score(delivery, institutional_flows, reasons, risks, missing),
         "events_quality": _events_score(result_volatility, reasons, risks, missing),
         "macro_sector": _macro_sector_score(fundamentals, reasons, risks, missing),
     }
@@ -302,13 +307,34 @@ def _technicals_score(
 
 def _flows_score(
     delivery: Mapping[str, Any] | None,
+    institutional_flows: Mapping[str, InstitutionalFlowSnapshot] | None,
     reasons: list[str],
     risks: list[str],
     missing: list[str],
 ) -> float:
-    if not delivery:
+    delivery_score = _delivery_only_score(delivery, reasons, risks, missing)
+    market_score = _market_flows_score(institutional_flows, reasons, risks, missing)
+    if delivery_score is None and market_score is None:
         missing.append("delivery and institutional flow data")
         return 50.0
+    if market_score is None:
+        return delivery_score if delivery_score is not None else 50.0
+    if delivery_score is None:
+        # Stock-level data missing — rely on market context but clamp toward
+        # neutral so a single market signal doesn't dominate the bucket.
+        return (market_score + 50.0) / 2.0
+    # Stock-level delivery weighs more than market-wide context.
+    return delivery_score * 0.6 + market_score * 0.4
+
+
+def _delivery_only_score(
+    delivery: Mapping[str, Any] | None,
+    reasons: list[str],
+    risks: list[str],
+    missing: list[str],
+) -> float | None:
+    if not delivery:
+        return None
 
     latest = _num(delivery.get("latest_pct"))
     ma20 = _num(delivery.get("ma20_pct"))
@@ -334,8 +360,32 @@ def _flows_score(
     if delivery.get("unusual_today"):
         reasons.append("Unusual delivery spike detected today.")
     if not parts:
-        return 50.0
+        return None
     return sum(parts) / len(parts)
+
+
+def _market_flows_score(
+    institutional_flows: Mapping[str, InstitutionalFlowSnapshot] | None,
+    reasons: list[str],
+    risks: list[str],
+    missing: list[str],
+) -> float | None:
+    if not institutional_flows:
+        return None
+    score = institutional_flow_score(dict(institutional_flows))
+    if score is None:
+        missing.append("FII/DII trend context")
+        return None
+    fii = institutional_flows.get("FII")
+    dii = institutional_flows.get("DII")
+    for snap in (fii, dii):
+        if snap is None:
+            continue
+        if snap.trend == "bullish":
+            reasons.append(f"{snap.participant} flow trend is bullish (5d/20d net positive).")
+        elif snap.trend == "bearish":
+            risks.append(f"{snap.participant} flow trend is bearish (5d/20d net negative).")
+    return score
 
 
 def _events_score(
