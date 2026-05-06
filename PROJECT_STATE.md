@@ -622,3 +622,11 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
     `.\.venv\Scripts\python.exe -m stock_platform.jobs.refresh_fundamentals --universe nifty_50 --source yfinance --max-symbols 3 --dry-run`.
   - Dry-run result: 3 symbols successful, 0 failed, 12 annual rows and 16 quarterly rows found; database was not changed.
   - Remaining fundamentals gap: choose a durable Indian fundamentals source policy and complete source ToS/reliability review before scaled use.
+- **Render deployment readiness added (2026-05-07)**:
+  - Added `render.yaml` for a Render Python web service running Streamlit on `$PORT` and binding to `0.0.0.0`.
+  - Configured hosted defaults to use yfinance market data, with Kite market data, trading, and portfolio flags disabled.
+  - Configured SQLite and generated data directories under `/var/data` for Render persistent disk storage.
+  - Added `docs/RENDER_DEPLOYMENT.md` with deployment steps, environment policy, persistent disk notes, and Kite secret safety guidance.
+  - Updated `README.md` to point to the Render deployment guide.
+  - Verified `render.yaml` parses successfully and that Render-style env vars load through `stock_platform.config`.
+  - Focused tests passed: 24 tests across strategy result schema, strategy scan persistence, and universe scanner.

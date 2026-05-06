@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: indian-stock-research-platform
+    runtime: python
+    plan: starter
+    region: singapore
+    branch: main
+    autoDeployTrigger: commit
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt && pip install -e .
+    startCommand: streamlit run src/stock_platform/ui/streamlit_app.py --server.address 0.0.0.0 --server.port $PORT --server.headless true --browser.gatherUsageStats false
+    healthCheckPath: /
+    disk:
+      name: stock-platform-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: APP_ENV
+        value: production
+      - key: APP_LOG_LEVEL
+        value: INFO
+      - key: APP_TIMEZONE
+        value: Asia/Kolkata
+      - key: DATABASE_URL
+        value: sqlite:////var/data/stock_platform.db
+      - key: CACHE_DIR
+        value: /var/data/cache
+      - key: RAW_DIR
+        value: /var/data/raw
+      - key: PROCESSED_DIR
+        value: /var/data/processed
+      - key: MARKET_DATA_PROVIDER
+        value: yfinance
+      - key: PROVIDER_PRICE
+        value: yfinance
+      - key: ENABLE_KITE_MARKET_DATA
+        value: false
+      - key: ENABLE_KITE_TRADING
+        value: false
+      - key: ENABLE_KITE_PORTFOLIO
+        value: false
