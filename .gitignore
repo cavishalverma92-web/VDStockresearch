@@ -113,6 +113,7 @@ $RECYCLE.BIN/
 tmp/
 .tmp/
 temp/
+pytest_local_probe/
 *.tmp
 *.bak
 *.swp

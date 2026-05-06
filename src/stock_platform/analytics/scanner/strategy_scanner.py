@@ -66,7 +66,7 @@ def scan_persisted_strategy_universe(
                 continue
             try:
                 raw_frame = fetch_price_daily(session, symbol)
-                frame, source_label, source_warning = _prepare_persisted_price_frame(raw_frame)
+                frame, source_label, source_warning = prepare_persisted_price_frame(raw_frame)
                 if frame.empty or len(frame) < min_history_rows:
                     errors[symbol] = f"insufficient persisted price history ({len(frame)} rows)"
                     continue
@@ -106,7 +106,7 @@ def scan_persisted_strategy_universe(
     )
 
 
-def _prepare_persisted_price_frame(frame: pd.DataFrame) -> tuple[pd.DataFrame, str, str]:
+def prepare_persisted_price_frame(frame: pd.DataFrame) -> tuple[pd.DataFrame, str, str]:
     """Deduplicate mixed-source persisted price rows into one OHLCV series."""
     if frame is None or frame.empty:
         return pd.DataFrame(), "none", ""
@@ -132,3 +132,6 @@ def _prepare_persisted_price_frame(frame: pd.DataFrame) -> tuple[pd.DataFrame, s
         working["adj_close"] = working["close"]
     source_label = source_values[-1] if len(source_values) == 1 else "mixed"
     return working, source_label, warning
+
+
+_prepare_persisted_price_frame = prepare_persisted_price_frame

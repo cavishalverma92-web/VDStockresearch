@@ -5,18 +5,54 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from stock_platform.analytics.scanner import (
-    DEFAULT_STRATEGY_SCAN_COLUMNS,
+from stock_platform.analytics.scanner.result_schema import DEFAULT_STRATEGY_SCAN_COLUMNS
+from stock_platform.analytics.scanner.strategy_persistence import (
     fetch_latest_strategy_scan,
-    list_available_universes,
-    load_universe,
     save_strategy_scan,
-    scan_persisted_strategy_universe,
     strategy_scan_errors,
     strategy_scan_storage_to_frame,
 )
+from stock_platform.analytics.scanner.strategy_scanner import (
+    prepare_persisted_price_frame,
+    scan_persisted_strategy_universe,
+)
+from stock_platform.analytics.scanner.universe_scanner import (
+    list_available_universes,
+    load_universe,
+)
+from stock_platform.analytics.technicals import add_technical_indicators
+from stock_platform.data.repositories import fetch_price_daily
+from stock_platform.db import get_session
 from stock_platform.ui.components.common import research_pick_button, universe_label
 from stock_platform.ui.components.layout import render_page_shell
+from stock_platform.ui.components.price_chart import build_price_chart
+
+
+def _result_key(symbol: object, strategy: object, signal_date: object) -> str:
+    parsed_date = pd.to_datetime(signal_date, errors="coerce")
+    date_label = str(signal_date) if pd.isna(parsed_date) else parsed_date.date().isoformat()
+    return f"{str(symbol).upper()}|{strategy}|{date_label}"
+
+
+def _result_option_label(row: pd.Series) -> str:
+    confidence = pd.to_numeric(row.get("confidence_score"), errors="coerce")
+    confidence_label = "N/A" if pd.isna(confidence) else f"{confidence:.0f}"
+    return (
+        f"{row.get('symbol')} | {row.get('strategy')} | {row.get('signal_date')} | "
+        f"confidence {confidence_label}"
+    )
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_strategy_chart_data(symbol: str) -> tuple[pd.DataFrame, pd.DataFrame, str, str]:
+    with get_session() as session:
+        raw_frame = fetch_price_daily(session, symbol)
+    price_frame, source_label, source_warning = prepare_persisted_price_frame(raw_frame)
+    if price_frame.empty:
+        return price_frame, pd.DataFrame(), source_label, source_warning
+    technical_frame = add_technical_indicators(price_frame)
+    return price_frame.tail(360), technical_frame.tail(360), source_label, source_warning
+
 
 render_page_shell(
     "Strategy Scanner",
@@ -143,16 +179,87 @@ else:
     if "rsi" in filtered.columns:
         rsi_values = pd.to_numeric(filtered["rsi"], errors="coerce")
         filtered = filtered[(rsi_values.isna()) | (rsi_values.between(min_rsi, max_rsi))]
+    filtered = filtered.copy()
+    filtered["_result_key"] = filtered.apply(
+        lambda row: _result_key(row["symbol"], row["strategy"], row["signal_date"]),
+        axis=1,
+    )
 
     default_cols = [column for column in DEFAULT_STRATEGY_SCAN_COLUMNS if column in filtered]
     st.subheader("Strategy Results")
     research_pick_button(filtered[default_cols], key="strategy_scanner_results")
 
+    result_lookup = {
+        _result_key(result.symbol, result.strategy, result.signal_date): result
+        for result in latest_run.results
+    }
+    chart_options = [
+        key for key in filtered["_result_key"].dropna().astype(str).tolist() if key in result_lookup
+    ]
+    if chart_options:
+        st.subheader("Strategy Chart")
+        option_labels = {
+            str(row["_result_key"]): _result_option_label(row)
+            for _, row in filtered.iterrows()
+            if str(row["_result_key"]) in result_lookup
+        }
+        selected_key = st.selectbox(
+            "Chart setup",
+            chart_options,
+            format_func=lambda key: option_labels.get(key, key),
+        )
+        selected_result = result_lookup[selected_key]
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Symbol", selected_result.symbol)
+        c2.metric("Strategy", selected_result.strategy)
+        c3.metric("Signal date", selected_result.signal_date.isoformat())
+        c4.metric("Data trust", selected_result.data_trust)
+
+        st.caption(selected_result.why_this_appeared)
+        if selected_result.key_risk:
+            st.warning(selected_result.key_risk)
+
+        chart_controls = st.columns(4)
+        show_volume = chart_controls[0].checkbox("Volume", value=True, key="strategy_chart_volume")
+        show_20 = chart_controls[1].checkbox("20 EMA", value=True, key="strategy_chart_20")
+        show_200 = chart_controls[2].checkbox("200 EMA", value=True, key="strategy_chart_200")
+        show_52w = chart_controls[3].checkbox("52W levels", value=False, key="strategy_chart_52w")
+
+        price_frame, technical_frame, chart_source, source_warning = _load_strategy_chart_data(
+            selected_result.symbol
+        )
+        if price_frame.empty:
+            st.info("No persisted OHLCV is available for this setup yet. Run EOD refresh first.")
+        else:
+            if source_warning:
+                st.warning(source_warning)
+            chart_signal = {
+                "name": selected_result.strategy,
+                "entry_zone_low": selected_result.entry_zone_low,
+                "entry_zone_high": selected_result.entry_zone_high,
+                "stop_loss": selected_result.stop_loss,
+                "target_price": selected_result.target_price,
+            }
+            fig = build_price_chart(
+                price_frame,
+                technical_frame,
+                symbol=selected_result.symbol,
+                source_label=chart_source,
+                show_20_ema=show_20,
+                show_200_ema=show_200,
+                show_52w=show_52w,
+                show_volume=show_volume,
+                active_signals=[chart_signal],
+                freshness_note=selected_result.data_freshness,
+            )
+            st.plotly_chart(fig, width="stretch")
+
     with st.expander("Advanced scanner columns"):
         advanced_cols = [
             column
             for column in filtered.columns
-            if column not in default_cols and column != "company_name"
+            if column not in default_cols and column not in {"company_name", "_result_key"}
         ]
         st.dataframe(
             filtered[[*default_cols[:1], *advanced_cols]], width="stretch", hide_index=True
