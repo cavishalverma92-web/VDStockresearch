@@ -90,6 +90,50 @@ def strategy_scan_storage_to_frame(run: StrategyScanRun | None) -> pd.DataFrame:
     return strategy_results_to_frame(results)
 
 
+def top_clean_strategy_hits(run: StrategyScanRun | None, *, limit: int = 5) -> pd.DataFrame:
+    """Return the highest-quality saved strategy setups for homepage attention."""
+    frame = strategy_scan_storage_to_frame(run)
+    columns = [
+        "symbol",
+        "strategy",
+        "setup_type",
+        "signal_date",
+        "close",
+        "risk_reward",
+        "confidence_score",
+        "relative_volume",
+        "avg_traded_value_cr",
+        "data_freshness",
+        "why_this_appeared",
+    ]
+    if frame.empty:
+        return pd.DataFrame(columns=columns)
+
+    filtered = frame.copy()
+    if "data_trust" in filtered.columns:
+        filtered = filtered[filtered["data_trust"] == "Good data"]
+    if "liquidity_status" in filtered.columns:
+        filtered = filtered[filtered["liquidity_status"] == "Pass"]
+    if filtered.empty:
+        return pd.DataFrame(columns=columns)
+
+    for column in ("confidence_score", "risk_reward", "relative_volume"):
+        if column in filtered.columns:
+            filtered[column] = pd.to_numeric(filtered[column], errors="coerce")
+
+    sort_columns = [
+        column
+        for column in ("confidence_score", "risk_reward", "relative_volume", "symbol")
+        if column in filtered.columns
+    ]
+    ascending = [False, False, False, True][: len(sort_columns)]
+    if sort_columns:
+        filtered = filtered.sort_values(sort_columns, ascending=ascending, na_position="last")
+
+    visible = [column for column in columns if column in filtered.columns]
+    return filtered[visible].head(max(0, int(limit))).reset_index(drop=True)
+
+
 def strategy_scan_errors(run: StrategyScanRun | None) -> dict[str, str]:
     """Return saved per-symbol scan errors."""
     if run is None or not run.errors_json:

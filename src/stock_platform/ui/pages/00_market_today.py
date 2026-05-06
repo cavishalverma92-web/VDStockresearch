@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from stock_platform.analytics.flows import compute_institutional_flow_snapshots
+from stock_platform.analytics.scanner import fetch_latest_strategy_scan, top_clean_strategy_hits
 from stock_platform.data.providers import MarketDataProvider
 from stock_platform.data.repositories import fetch_market_flows
 from stock_platform.db import get_session
@@ -102,6 +103,26 @@ with tab_events:
         st.info("No saved upcoming events in the next 5 trading days.")
     else:
         research_pick_button(summary.upcoming_events, key="market_events")
+
+st.divider()
+
+# --- Top strategy setups ------------------------------------------------------
+st.subheader("Top clean strategy setups")
+latest_strategy_run = fetch_latest_strategy_scan()
+top_strategy_hits = top_clean_strategy_hits(latest_strategy_run, limit=5)
+if latest_strategy_run is None:
+    st.info("No saved strategy scan yet. Run Strategy Scanner after EOD refresh.")
+elif top_strategy_hits.empty:
+    st.warning(
+        "Latest strategy scan has no clean, liquid setups after default trust filters. "
+        "Open Strategy Scanner to review warnings manually."
+    )
+else:
+    st.caption(
+        f"From strategy scan #{latest_strategy_run.id} on {latest_strategy_run.created_at}. "
+        "Only Good data + Pass liquidity rows are shown here."
+    )
+    research_pick_button(top_strategy_hits, key="market_strategy_setups")
 
 st.divider()
 

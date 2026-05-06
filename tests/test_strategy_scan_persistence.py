@@ -14,15 +14,23 @@ from stock_platform.analytics.scanner import (
     save_strategy_scan,
     strategy_scan_errors,
     strategy_scan_storage_to_frame,
+    top_clean_strategy_hits,
 )
 from stock_platform.db.models import Base, StrategyScanRun
 from stock_platform.db.models import StrategyScanResult as StrategyScanResultModel
 
 
-def _strategy_result(symbol: str = "RELIANCE.NS") -> StrategyScanResult:
+def _strategy_result(
+    symbol: str = "RELIANCE.NS",
+    *,
+    strategy: str = "EMA Stack Trend Filter",
+    confidence_score: float = 82.0,
+    data_trust: str = "Good data",
+    liquidity_status: str = "Pass",
+) -> StrategyScanResult:
     return StrategyScanResult(
         symbol=symbol,
-        strategy="EMA Stack Trend Filter",
+        strategy=strategy,
         setup_type="Trend",
         signal_date=date(2026, 5, 1),
         close=1400.0,
@@ -35,12 +43,13 @@ def _strategy_result(symbol: str = "RELIANCE.NS") -> StrategyScanResult:
         trend_status="bullish",
         relative_volume=1.2,
         atr_pct=2.0,
-        liquidity_status="Pass",
+        liquidity_status=liquidity_status,
         data_source="kite",
         data_freshness="2026-05-01",
-        confidence_score=82.0,
+        confidence_score=confidence_score,
         why_this_appeared="Price is above a fully aligned EMA stack.",
         key_risk="Trend filters can appear late.",
+        data_trust=data_trust,
         ema_20=1380.0,
         ema_50=1320.0,
         ema_100=1250.0,
@@ -123,3 +132,32 @@ def test_fetch_latest_strategy_scan_returns_none_for_empty_db() -> None:
 
     assert fetch_latest_strategy_scan("nifty_50", engine=engine) is None
     assert strategy_scan_storage_to_frame(None).empty
+
+
+def test_top_clean_strategy_hits_filters_and_sorts_attention_rows() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    summary = StrategyScanSummary(
+        requested_symbols=4,
+        scanned_symbols=4,
+        failed_symbols=0,
+        results=[
+            _strategy_result("LOW.NS", confidence_score=70),
+            _strategy_result("WARN.NS", confidence_score=90, data_trust="Warning"),
+            _strategy_result("THIN.NS", confidence_score=88, liquidity_status="Low"),
+            _strategy_result(
+                "BEST.NS",
+                strategy="Breakout With Relative Volume",
+                confidence_score=86,
+            ),
+        ],
+        errors={},
+    )
+    save_strategy_scan(universe_name="nifty_50", summary=summary, engine=engine)
+    run = fetch_latest_strategy_scan("nifty_50", engine=engine)
+
+    frame = top_clean_strategy_hits(run, limit=5)
+
+    assert list(frame["symbol"]) == ["BEST.NS", "LOW.NS"]
+    assert "WARN.NS" not in set(frame["symbol"])
+    assert "THIN.NS" not in set(frame["symbol"])

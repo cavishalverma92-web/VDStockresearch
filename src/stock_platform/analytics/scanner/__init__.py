@@ -32,6 +32,7 @@ from stock_platform.analytics.scanner.strategy_persistence import (
     save_strategy_scan,
     strategy_scan_errors,
     strategy_scan_storage_to_frame,
+    top_clean_strategy_hits,
 )
 from stock_platform.analytics.scanner.strategy_scanner import (
     StrategyScanSummary,
@@ -87,6 +88,7 @@ __all__ = [
     "summarize_strategy_scan_frame",
     "strategy_scan_errors",
     "strategy_scan_storage_to_frame",
+    "top_clean_strategy_hits",
     "universe_size",
     "update_watchlist_reviews",
     "watchlist_to_frame",
