@@ -27,6 +27,7 @@ DEFAULT_STRATEGY_SCAN_COLUMNS = [
     "trend_status",
     "relative_volume",
     "liquidity_status",
+    "data_trust",
     "data_freshness",
     "confidence_score",
     "why_this_appeared",
@@ -44,7 +45,6 @@ ADVANCED_STRATEGY_SCAN_COLUMNS = [
     "ema_200",
     "breakout_level",
     "avg_traded_value_cr",
-    "data_trust",
     "warnings",
     "provider_fallback_reason",
 ]

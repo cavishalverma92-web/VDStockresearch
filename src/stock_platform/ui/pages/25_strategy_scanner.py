@@ -151,10 +151,14 @@ else:
             default=sorted(frame["strategy"].dropna().unique()),
         )
     with filters[1]:
+        liquidity_options = sorted(frame["liquidity_status"].dropna().unique())
+        default_liquidity = [
+            value for value in liquidity_options if value in {"Pass", "Watch", "Unknown"}
+        ]
         selected_liquidity = st.multiselect(
             "Liquidity",
-            sorted(frame["liquidity_status"].dropna().unique()),
-            default=sorted(frame["liquidity_status"].dropna().unique()),
+            liquidity_options,
+            default=default_liquidity or liquidity_options,
         )
     with filters[2]:
         min_rsi, max_rsi = st.slider("RSI range", 0, 100, (35, 80), 5)
@@ -165,6 +169,32 @@ else:
             default=sorted(frame["data_source"].dropna().unique()),
         )
 
+    risk_filters = st.columns([1, 1, 1])
+    with risk_filters[0]:
+        trust_options = sorted(frame["data_trust"].dropna().unique())
+        default_trust = [value for value in trust_options if value != "Do not trust signal"]
+        selected_trust = st.multiselect(
+            "Data trust",
+            trust_options,
+            default=default_trust or trust_options,
+        )
+    with risk_filters[1]:
+        min_traded_value = st.number_input(
+            "Min traded value (INR cr)",
+            min_value=0.0,
+            max_value=500.0,
+            value=5.0,
+            step=1.0,
+        )
+    with risk_filters[2]:
+        max_atr_pct = st.number_input(
+            "Max ATR %",
+            min_value=0.0,
+            max_value=50.0,
+            value=12.0,
+            step=1.0,
+        )
+
     filtered = frame.copy()
     if selected_strategies:
         filtered = filtered[filtered["strategy"].isin(selected_strategies)]
@@ -172,10 +202,18 @@ else:
         filtered = filtered[filtered["liquidity_status"].isin(selected_liquidity)]
     if selected_sources:
         filtered = filtered[filtered["data_source"].isin(selected_sources)]
+    if selected_trust:
+        filtered = filtered[filtered["data_trust"].isin(selected_trust)]
     filtered = filtered[
         (filtered["confidence_score"].fillna(0) >= float(min_confidence))
         & (filtered["risk_reward"].fillna(0) >= float(min_rr))
     ]
+    if "avg_traded_value_cr" in filtered.columns:
+        traded_values = pd.to_numeric(filtered["avg_traded_value_cr"], errors="coerce")
+        filtered = filtered[(traded_values.isna()) | (traded_values >= float(min_traded_value))]
+    if "atr_pct" in filtered.columns:
+        atr_values = pd.to_numeric(filtered["atr_pct"], errors="coerce")
+        filtered = filtered[(atr_values.isna()) | (atr_values <= float(max_atr_pct))]
     if "rsi" in filtered.columns:
         rsi_values = pd.to_numeric(filtered["rsi"], errors="coerce")
         filtered = filtered[(rsi_values.isna()) | (rsi_values.between(min_rsi, max_rsi))]
@@ -187,6 +225,10 @@ else:
 
     default_cols = [column for column in DEFAULT_STRATEGY_SCAN_COLUMNS if column in filtered]
     st.subheader("Strategy Results")
+    st.caption(
+        "Default filters hide low-liquidity and do-not-trust rows. Expand filters to review "
+        "them manually; this is still a research aid, not investment advice."
+    )
     research_pick_button(filtered[default_cols], key="strategy_scanner_results")
 
     result_lookup = {

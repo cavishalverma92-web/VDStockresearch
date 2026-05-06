@@ -39,6 +39,12 @@ risk:
   default_stop_loss_atr_multiple: 2.0
   default_target_r_multiple: 2.5     # reward-to-risk target
 
+# --- Scanner risk filters ---
+scanner_risk:
+  min_price: 20.0                    # flag low-priced names as manipulation-risk
+  high_atr_pct: 8.0                  # warn when ATR is this high as % of price
+  extreme_atr_pct: 12.0              # mark signal untrusted above this ATR %
+
 # --- Data quality thresholds ---
 data_quality:
   max_missing_close_pct: 5.0         # fail if > this share of closes are missing

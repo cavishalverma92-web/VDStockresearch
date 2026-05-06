@@ -33,6 +33,7 @@ from stock_platform.analytics.scanner.strategy_persistence import (
 )
 from stock_platform.analytics.scanner.strategy_scanner import (
     StrategyScanSummary,
+    prepare_persisted_price_frame,
     scan_persisted_strategy_universe,
 )
 from stock_platform.analytics.scanner.universe_scanner import (
@@ -72,6 +73,7 @@ __all__ = [
     "fetch_watchlist_items",
     "list_available_universes",
     "load_universe",
+    "prepare_persisted_price_frame",
     "save_universe_scan",
     "save_strategy_scan",
     "scan_persisted_strategy_universe",

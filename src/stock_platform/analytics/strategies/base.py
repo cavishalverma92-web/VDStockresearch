@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Protocol
 
 import pandas as pd
 
 from stock_platform.analytics.scanner.result_schema import StrategyScanResult
 from stock_platform.analytics.technicals import add_technical_indicators
-from stock_platform.config import get_universe_config
+from stock_platform.config import get_thresholds_config, get_universe_config
 
 
 @dataclass(frozen=True)
@@ -137,6 +138,69 @@ def liquidity_status(context: StrategyContext) -> tuple[str, float | None, list[
     return "Low", value_cr, [f"Average traded value is below INR {warn_cr:.0f} crore."]
 
 
+def data_trust_status(
+    context: StrategyContext,
+    *,
+    liquidity: str,
+    avg_value_cr: float | None,
+) -> tuple[str, list[str]]:
+    """Classify whether a strategy signal is usable, risky, or not trustworthy."""
+    row = context.latest
+    warnings: list[str] = []
+    critical: list[str] = []
+    thresholds = get_thresholds_config()
+    stale_days = int(thresholds.get("data_quality", {}).get("stale_price_days", 5))
+    risk_cfg = thresholds.get("scanner_risk", {})
+    high_atr_pct = float(risk_cfg.get("high_atr_pct", 8.0))
+    extreme_atr_pct = float(risk_cfg.get("extreme_atr_pct", 12.0))
+    min_price = float(risk_cfg.get("min_price", 20.0))
+
+    close = safe_float(row.get("close"))
+    atr_pct = safe_float(row.get("atr_pct"))
+    latest_date = latest_signal_date(context)
+    age_days = (datetime.now(UTC).date() - latest_date).days
+
+    if age_days > stale_days:
+        critical.append(f"Persisted price data is stale by {age_days} day(s).")
+    if liquidity == "Low":
+        critical.append("Liquidity is below the scanner trust floor.")
+    elif liquidity == "Unknown":
+        warnings.append("Liquidity could not be verified.")
+    elif liquidity == "Watch":
+        warnings.append("Liquidity is acceptable only for cautious review.")
+    if avg_value_cr is None:
+        warnings.append("Average traded value is unavailable.")
+
+    if close is not None and close < min_price:
+        critical.append(
+            f"Close price is below INR {min_price:.0f}, which raises manipulation risk."
+        )
+    if atr_pct is not None:
+        if atr_pct > extreme_atr_pct:
+            critical.append(f"ATR is extremely high at {atr_pct:.1f}% of price.")
+        elif atr_pct > high_atr_pct:
+            warnings.append(f"ATR is high at {atr_pct:.1f}% of price.")
+
+    for warning in context.warnings:
+        lowered = warning.lower()
+        if "stale_data" in lowered:
+            critical.append(warning)
+        elif (
+            "suspicious_price_moves" in lowered
+            or "zero_volume_rows" in lowered
+            or "mixed persisted price sources" in lowered
+        ):
+            warnings.append(warning)
+        else:
+            warnings.append(warning)
+
+    if critical:
+        return "Do not trust signal", [*critical, *warnings]
+    if warnings:
+        return "Warning", warnings
+    return "Good data", []
+
+
 def risk_plan(row: pd.Series) -> tuple[float | None, float | None, float | None, float | None]:
     """Educational ATR-based entry/stop/target plan."""
     close = safe_float(row.get("close"))
@@ -155,6 +219,11 @@ def common_result_kwargs(context: StrategyContext) -> dict[str, object]:
     """Shared result fields computed from the latest row."""
     row = context.latest
     liquidity, traded_value_cr, liquidity_warnings = liquidity_status(context)
+    trust_label, trust_warnings = data_trust_status(
+        context,
+        liquidity=liquidity,
+        avg_value_cr=traded_value_cr,
+    )
     entry_low, entry_high, stop_loss, target = risk_plan(row)
     return {
         "symbol": context.symbol,
@@ -172,6 +241,7 @@ def common_result_kwargs(context: StrategyContext) -> dict[str, object]:
         "liquidity_status": liquidity,
         "data_source": context.data_source,
         "data_freshness": context.data_freshness,
+        "data_trust": trust_label,
         "company_name": context.company_name,
         "sector": context.sector,
         "market_cap_bucket": context.market_cap_bucket,
@@ -180,7 +250,7 @@ def common_result_kwargs(context: StrategyContext) -> dict[str, object]:
         "ema_100": _round_optional(row.get("ema_100")),
         "ema_200": _round_optional(row.get("ema_200")),
         "avg_traded_value_cr": traded_value_cr,
-        "warnings": tuple([*context.warnings, *liquidity_warnings]),
+        "warnings": tuple(dict.fromkeys([*liquidity_warnings, *trust_warnings])),
         "provider_fallback_reason": context.provider_fallback_reason,
     }
 
@@ -192,6 +262,9 @@ def confidence_from_context(context: StrategyContext, base: float) -> float:
     relative_volume = safe_float(row.get("relative_volume"))
     atr_pct = safe_float(row.get("atr_pct"))
     liquidity, _, _ = liquidity_status(context)
+    trust, _ = data_trust_status(
+        context, liquidity=liquidity, avg_value_cr=avg_traded_value_cr(context)
+    )
     if relative_volume is not None and relative_volume >= 1.5:
         score += 5
     if atr_pct is not None and 1 <= atr_pct <= 5:
@@ -200,6 +273,10 @@ def confidence_from_context(context: StrategyContext, base: float) -> float:
         score += 5
     elif liquidity == "Low":
         score -= 8
+    if trust == "Warning":
+        score -= 6
+    elif trust == "Do not trust signal":
+        score -= 18
     if context.warnings:
         score -= 6
     return round(max(0.0, min(score, 90.0)), 1)

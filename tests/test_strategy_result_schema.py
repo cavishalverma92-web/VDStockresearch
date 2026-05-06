@@ -33,6 +33,12 @@ def _trend_frame(days: int = 260) -> pd.DataFrame:
     )
 
 
+def _low_liquidity_trend_frame(days: int = 260) -> pd.DataFrame:
+    frame = _trend_frame(days)
+    frame["volume"] = 1_000
+    return frame
+
+
 def test_strategy_results_to_frame_has_default_and_advanced_columns():
     result = StrategyScanResult(
         symbol="RELIANCE.NS",
@@ -85,3 +91,21 @@ def test_scan_persisted_strategy_universe_finds_ema_stack_from_local_db():
     assert summary.scanned_symbols == 1
     assert summary.failed_symbols == 0
     assert "EMA Stack Trend Filter" in strategies
+
+
+def test_scan_persisted_strategy_universe_flags_low_liquidity_as_untrusted():
+    engine = get_engine("sqlite:///:memory:")
+    create_all_tables(engine)
+    with get_session(engine) as session:
+        upsert_price_daily(session, "THIN.NS", _low_liquidity_trend_frame(), source="kite")
+
+    with patch(
+        "stock_platform.analytics.scanner.strategy_scanner.load_universe",
+        return_value=["THIN.NS"],
+    ):
+        summary = scan_persisted_strategy_universe("nifty_50", engine=engine)
+
+    assert summary.results
+    assert {result.liquidity_status for result in summary.results} == {"Low"}
+    assert {result.data_trust for result in summary.results} == {"Do not trust signal"}
+    assert all(result.confidence_score < 76 for result in summary.results)
