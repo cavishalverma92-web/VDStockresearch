@@ -282,6 +282,7 @@ else:
                 "entry_zone_high": selected_result.entry_zone_high,
                 "stop_loss": selected_result.stop_loss,
                 "target_price": selected_result.target_price,
+                "breakout_level": selected_result.breakout_level,
             }
             fig = build_price_chart(
                 price_frame,

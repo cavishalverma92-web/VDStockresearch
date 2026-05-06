@@ -39,6 +39,25 @@ def _low_liquidity_trend_frame(days: int = 260) -> pd.DataFrame:
     return frame
 
 
+def _breakout_frame(days: int = 260) -> pd.DataFrame:
+    idx = pd.date_range(end=date.today(), periods=days, freq="B")
+    close = np.linspace(100, 130, days)
+    high = close + 1.0
+    close[-1] = 136.0
+    high[-1] = 138.0
+    return pd.DataFrame(
+        {
+            "open": close - 0.75,
+            "high": high,
+            "low": close - 1.5,
+            "close": close,
+            "adj_close": close,
+            "volume": [1_000_000] * (days - 1) + [2_800_000],
+        },
+        index=idx,
+    )
+
+
 def test_strategy_results_to_frame_has_default_and_advanced_columns():
     result = StrategyScanResult(
         symbol="RELIANCE.NS",
@@ -109,3 +128,25 @@ def test_scan_persisted_strategy_universe_flags_low_liquidity_as_untrusted():
     assert {result.liquidity_status for result in summary.results} == {"Low"}
     assert {result.data_trust for result in summary.results} == {"Do not trust signal"}
     assert all(result.confidence_score < 76 for result in summary.results)
+
+
+def test_scan_persisted_strategy_universe_finds_breakout_with_volume():
+    engine = get_engine("sqlite:///:memory:")
+    create_all_tables(engine)
+    with get_session(engine) as session:
+        upsert_price_daily(session, "BREAKOUT.NS", _breakout_frame(), source="kite")
+
+    with patch(
+        "stock_platform.analytics.scanner.strategy_scanner.load_universe",
+        return_value=["BREAKOUT.NS"],
+    ):
+        summary = scan_persisted_strategy_universe("nifty_50", engine=engine)
+
+    breakout = next(
+        result for result in summary.results if result.strategy == "Breakout With Relative Volume"
+    )
+    assert breakout.setup_type == "Breakout"
+    assert breakout.breakout_level is not None
+    assert breakout.relative_volume is not None
+    assert breakout.relative_volume >= 2.0
+    assert breakout.data_trust in {"Good data", "Warning"}

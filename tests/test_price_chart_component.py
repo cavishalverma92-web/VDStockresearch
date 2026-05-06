@@ -11,6 +11,7 @@ class _Signal:
     entry_zone_high = 104
     stop_loss = 96
     target_price = 116
+    breakout_level = 108
 
 
 def _sample_price_frame() -> pd.DataFrame:
@@ -82,5 +83,5 @@ def test_price_chart_adds_optional_context_only_when_requested() -> None:
     assert "200 EMA" in trace_names
     assert "Bollinger upper" in trace_names
     assert "52W high" in trace_names
-    assert len(fig.layout.shapes) >= 4
+    assert len(fig.layout.shapes) >= 5
     assert "fallback used" in fig.layout.title.text

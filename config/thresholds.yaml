@@ -25,6 +25,8 @@ signals:
   breakout_with_volume:
     volume_multiple: 2.0             # vs 20-day avg
     lookback_days_for_high: 252      # 52-week high
+    shorter_lookback_days: 120       # multi-month high when 252 bars are unavailable
+    max_extension_pct: 6.0           # avoid chasing far above breakout level
 
   darvas_base_breakout:
     min_consolidation_days: 20

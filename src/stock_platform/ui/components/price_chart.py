@@ -38,6 +38,7 @@ def _add_signal_context(fig: go.Figure, signal: Any) -> None:
     entry_high = _safe_attr(signal, "entry_zone_high")
     stop_loss = _safe_attr(signal, "stop_loss")
     target = _safe_attr(signal, "target_price")
+    breakout_level = _safe_attr(signal, "breakout_level")
     name = _safe_attr(signal, "name") or "Active signal"
 
     if entry_low is not None and entry_high is not None:
@@ -68,6 +69,16 @@ def _add_signal_context(fig: go.Figure, signal: Any) -> None:
             line_dash="dash",
             annotation_text="Target",
             annotation_position="top right",
+            row=1,
+            col=1,
+        )
+    if breakout_level is not None:
+        fig.add_hline(
+            y=breakout_level,
+            line_color="#ca8a04",
+            line_dash="dash",
+            annotation_text="Breakout level",
+            annotation_position="bottom left",
             row=1,
             col=1,
         )
