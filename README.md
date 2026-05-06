@@ -63,8 +63,9 @@ indian-stock-research-platform/
 
 The repo includes a conservative `render.yaml` for deploying the Streamlit app
 as a Render Python web service. The hosted configuration defaults to yfinance,
-stores SQLite and generated market data on a Render persistent disk, and keeps
-Kite credentials out of source control.
+uses temporary SQLite/generated data on Render's free instance type, and keeps
+Kite credentials out of source control. Hosted data can reset on the free plan;
+see the guide before relying on scanner history.
 
 See [`docs/RENDER_DEPLOYMENT.md`](./docs/RENDER_DEPLOYMENT.md) before creating
 the Render service.

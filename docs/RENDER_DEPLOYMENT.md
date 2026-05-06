@@ -8,23 +8,26 @@ portfolio, holdings, positions, funds, margins, or automated trading features.
 ## What Is Included
 
 - `render.yaml` defines one Python web service.
+- The service uses Render's free instance type for the first demo deployment.
 - The app runs with Streamlit on Render's assigned `$PORT`.
 - Streamlit binds to `0.0.0.0`, which Render requires for public web traffic.
-- SQLite is configured at `/var/data/stock_platform.db` on a persistent disk.
-- Cache, raw, and processed data directories are also under `/var/data`.
+- SQLite is configured at `data/stock_platform.db` on Render's ephemeral
+  filesystem.
+- Cache, raw, and processed data directories are also under `data/`.
 - Kite market data is disabled by default for the hosted app.
 - yfinance is the default public deployment market-data provider.
 
 ## Important Render Notes
 
-- Render services have an ephemeral filesystem unless a persistent disk is
-  attached.
-- The current Blueprint uses a persistent disk, so it requires a paid web
-  service plan.
-- Only files under the disk mount path, `/var/data`, survive redeploys.
-- A service with a persistent disk cannot scale to multiple instances.
-- Persistent disks disable zero-downtime deploys because Render must stop the
-  old instance before attaching the disk to the new one.
+- This is a free demo deployment, not a durable production deployment.
+- Render free web services spin down after idle periods and can restart at any
+  time.
+- Free web services do not support persistent disks.
+- Local SQLite files, refresh history, scanner results, generated cache files,
+  and raw/processed data can be lost on redeploy, restart, or spin-down.
+- Use this first deployment to confirm the app loads and the UI works online.
+- Upgrade later to a paid service with persistent disk or Postgres before using
+  the hosted app for daily research history.
 
 ## Recommended First Deployment
 
@@ -36,8 +39,9 @@ portfolio, holdings, positions, funds, margins, or automated trading features.
 6. Open the deployed URL and confirm the app loads.
 7. Check the Data Health and Strategy Scanner pages.
 
-The first hosted deployment starts with an empty SQLite database. Run a fresh
-data refresh from the app before relying on scanner pages.
+The first hosted deployment starts with an empty SQLite database. On the free
+plan, that database is temporary. Run a fresh data refresh from the app after
+deploying, and expect those saved results to reset occasionally.
 
 ## Environment Variables
 
@@ -47,10 +51,10 @@ The Blueprint sets safe defaults:
 APP_ENV=production
 APP_LOG_LEVEL=INFO
 APP_TIMEZONE=Asia/Kolkata
-DATABASE_URL=sqlite:////var/data/stock_platform.db
-CACHE_DIR=/var/data/cache
-RAW_DIR=/var/data/raw
-PROCESSED_DIR=/var/data/processed
+DATABASE_URL=sqlite:///data/stock_platform.db
+CACHE_DIR=data/cache
+RAW_DIR=data/raw
+PROCESSED_DIR=data/processed
 MARKET_DATA_PROVIDER=yfinance
 PROVIDER_PRICE=yfinance
 ENABLE_KITE_MARKET_DATA=false
@@ -96,8 +100,8 @@ streamlit run src/stock_platform/ui/streamlit_app.py --server.address 0.0.0.0 --
 
 - `render.yaml` is committed.
 - `.env` is not committed.
-- `DATABASE_URL` points to `/var/data/stock_platform.db`.
-- Generated data paths point to `/var/data`.
+- `DATABASE_URL` points to `data/stock_platform.db`.
+- Generated data paths point to `data/`.
 - Kite trading and portfolio flags remain false.
 - The app disclaimer is visible.
 - Strategy Scanner wording remains research-only.
@@ -105,11 +109,36 @@ streamlit run src/stock_platform/ui/streamlit_app.py --server.address 0.0.0.0 --
 
 ## Known Limitations
 
-- SQLite on a persistent disk is acceptable for a small personal MVP, but
-  Postgres is better for multi-user or production-grade use.
-- The deployed app has a fresh database unless you separately migrate data.
+- SQLite on Render free is temporary. Refresh runs and scanner results can
+  disappear after redeploys, restarts, or idle spin-downs.
+- Free web services have cold starts after idle periods.
+- A paid persistent disk or Postgres is required for durable hosted history.
+- The deployed app has a fresh database unless you separately migrate data, and
+  on the free plan that data is not durable.
 - yfinance can be delayed, incomplete, or rate-limited.
 - Kite does not provide fundamentals, delivery percentage, result calendar, or
   corporate-action reliability by itself.
 - Public deployment should be treated as a demo or personal research interface,
   not as a regulated investment advisory product.
+
+## Later Durable Option
+
+When the free demo is working, switch to a durable deployment by changing
+`render.yaml` back to a paid plan and adding a persistent disk:
+
+```yaml
+plan: starter
+disk:
+  name: stock-platform-data
+  mountPath: /var/data
+  sizeGB: 1
+```
+
+Then set:
+
+```text
+DATABASE_URL=sqlite:////var/data/stock_platform.db
+CACHE_DIR=/var/data/cache
+RAW_DIR=/var/data/raw
+PROCESSED_DIR=/var/data/processed
+```
