@@ -93,7 +93,13 @@ pip install --upgrade pip && pip install -r requirements.txt && pip install -e .
 Start:
 
 ```bash
-streamlit run src/stock_platform/ui/streamlit_app.py --server.address 0.0.0.0 --server.port $PORT --server.headless true --browser.gatherUsageStats false
+bash -lc 'python -m streamlit run src/stock_platform/ui/streamlit_app.py --server.address 0.0.0.0 --server.port "$PORT" --server.headless true --server.enableCORS false --server.enableXsrfProtection false --server.fileWatcherType none --browser.gatherUsageStats false'
+```
+
+Render health check:
+
+```text
+/_stcore/health
 ```
 
 ## Pre-Launch Checklist
