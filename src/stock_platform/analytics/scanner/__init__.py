@@ -22,8 +22,10 @@ from stock_platform.analytics.scanner.persistence import (
 from stock_platform.analytics.scanner.result_schema import (
     ADVANCED_STRATEGY_SCAN_COLUMNS,
     DEFAULT_STRATEGY_SCAN_COLUMNS,
+    StrategyScanFrameSummary,
     StrategyScanResult,
     strategy_results_to_frame,
+    summarize_strategy_scan_frame,
 )
 from stock_platform.analytics.scanner.strategy_persistence import (
     fetch_latest_strategy_scan,
@@ -58,6 +60,7 @@ __all__ = [
     "DEFAULT_STRATEGY_SCAN_COLUMNS",
     "ScanResult",
     "StrategyScanResult",
+    "StrategyScanFrameSummary",
     "StrategyScanSummary",
     "add_symbols_to_watchlist",
     "build_daily_research_brief",
@@ -81,6 +84,7 @@ __all__ = [
     "scan_storage_to_frame",
     "scan_universe",
     "strategy_results_to_frame",
+    "summarize_strategy_scan_frame",
     "strategy_scan_errors",
     "strategy_scan_storage_to_frame",
     "universe_size",

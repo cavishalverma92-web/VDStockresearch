@@ -12,6 +12,7 @@ from stock_platform.analytics.scanner import (
     StrategyScanResult,
     scan_persisted_strategy_universe,
     strategy_results_to_frame,
+    summarize_strategy_scan_frame,
 )
 from stock_platform.data.repositories import upsert_price_daily
 from stock_platform.db import create_all_tables, get_engine, get_session
@@ -92,6 +93,42 @@ def test_strategy_results_to_frame_has_default_and_advanced_columns():
     assert frame.iloc[0]["entry_zone"] == "INR 1390.00 - 1405.00"
     assert "why_this_appeared" in frame.columns
     assert "ema_200" in frame.columns
+
+
+def test_summarize_strategy_scan_frame_counts_attention_buckets():
+    frame = pd.DataFrame(
+        [
+            {
+                "symbol": "A.NS",
+                "strategy": "Breakout With Relative Volume",
+                "setup_type": "Breakout",
+                "data_trust": "Good data",
+            },
+            {
+                "symbol": "B.NS",
+                "strategy": "EMA Stack Trend Filter",
+                "setup_type": "Trend",
+                "data_trust": "Warning",
+            },
+            {
+                "symbol": "B.NS",
+                "strategy": "EMA Stack Trend Filter",
+                "setup_type": "Trend",
+                "data_trust": "Do not trust signal",
+            },
+        ]
+    )
+
+    summary = summarize_strategy_scan_frame(frame)
+
+    assert summary.total_setups == 3
+    assert summary.unique_symbols == 2
+    assert summary.clean_setups == 1
+    assert summary.warning_setups == 1
+    assert summary.untrusted_setups == 1
+    assert summary.breakout_setups == 1
+    assert summary.top_strategy == "EMA Stack Trend Filter"
+    assert summary.top_strategy_count == 2
 
 
 def test_scan_persisted_strategy_universe_finds_ema_stack_from_local_db():

@@ -138,6 +138,20 @@ class StrategyScanResult:
         }
 
 
+@dataclass(frozen=True)
+class StrategyScanFrameSummary:
+    """Compact counts for scanner dashboard cards."""
+
+    total_setups: int
+    unique_symbols: int
+    clean_setups: int
+    warning_setups: int
+    untrusted_setups: int
+    breakout_setups: int
+    top_strategy: str
+    top_strategy_count: int
+
+
 def strategy_results_to_frame(
     results: list[StrategyScanResult],
     *,
@@ -158,4 +172,53 @@ def strategy_results_to_frame(
             na_position="last",
         )
         .reset_index(drop=True)
+    )
+
+
+def summarize_strategy_scan_frame(frame: pd.DataFrame) -> StrategyScanFrameSummary:
+    """Summarize a strategy scan result frame for high-signal UI cards."""
+    if frame is None or frame.empty:
+        return StrategyScanFrameSummary(
+            total_setups=0,
+            unique_symbols=0,
+            clean_setups=0,
+            warning_setups=0,
+            untrusted_setups=0,
+            breakout_setups=0,
+            top_strategy="None",
+            top_strategy_count=0,
+        )
+
+    total = len(frame)
+    unique_symbols = int(frame["symbol"].nunique()) if "symbol" in frame.columns else 0
+    trust = frame.get("data_trust", pd.Series(dtype="object")).fillna("").astype(str)
+    clean = int((trust == "Good data").sum())
+    warning = int((trust == "Warning").sum())
+    untrusted = int((trust == "Do not trust signal").sum())
+
+    setup_type = frame.get("setup_type", pd.Series(dtype="object")).fillna("").astype(str)
+    strategy = frame.get("strategy", pd.Series(dtype="object")).fillna("").astype(str)
+    breakout = int(
+        (
+            (setup_type.str.lower() == "breakout") | strategy.str.contains("breakout", case=False)
+        ).sum()
+    )
+
+    counts = strategy[strategy != ""].value_counts()
+    if counts.empty:
+        top_strategy = "None"
+        top_count = 0
+    else:
+        top_strategy = str(counts.index[0])
+        top_count = int(counts.iloc[0])
+
+    return StrategyScanFrameSummary(
+        total_setups=total,
+        unique_symbols=unique_symbols,
+        clean_setups=clean,
+        warning_setups=warning,
+        untrusted_setups=untrusted,
+        breakout_setups=breakout,
+        top_strategy=top_strategy,
+        top_strategy_count=top_count,
     )

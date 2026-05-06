@@ -5,7 +5,10 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from stock_platform.analytics.scanner.result_schema import DEFAULT_STRATEGY_SCAN_COLUMNS
+from stock_platform.analytics.scanner.result_schema import (
+    DEFAULT_STRATEGY_SCAN_COLUMNS,
+    summarize_strategy_scan_frame,
+)
 from stock_platform.analytics.scanner.strategy_persistence import (
     fetch_latest_strategy_scan,
     save_strategy_scan,
@@ -143,6 +146,20 @@ frame = strategy_scan_storage_to_frame(latest_run)
 if frame.empty:
     st.info("No strategy setups matched the first MVP rules in this saved data.")
 else:
+    summary_cards = summarize_strategy_scan_frame(frame)
+    st.subheader("Scan Summary")
+    card_row_1 = st.columns(4)
+    card_row_1[0].metric("Total setups", summary_cards.total_setups)
+    card_row_1[1].metric("Unique symbols", summary_cards.unique_symbols)
+    card_row_1[2].metric("Clean setups", summary_cards.clean_setups)
+    card_row_1[3].metric("Needs review", summary_cards.warning_setups)
+
+    card_row_2 = st.columns(4)
+    card_row_2[0].metric("Do not trust", summary_cards.untrusted_setups)
+    card_row_2[1].metric("Breakouts", summary_cards.breakout_setups)
+    card_row_2[2].metric("Top strategy", summary_cards.top_strategy)
+    card_row_2[3].metric("Top strategy rows", summary_cards.top_strategy_count)
+
     filters = st.columns([2, 1, 1, 1])
     with filters[0]:
         selected_strategies = st.multiselect(
