@@ -26,7 +26,11 @@ from stock_platform.analytics.scanner.universe_scanner import (
 from stock_platform.analytics.technicals import add_technical_indicators
 from stock_platform.data.repositories import fetch_price_daily
 from stock_platform.db import get_session
-from stock_platform.ui.components.common import research_pick_button, universe_label
+from stock_platform.ui.components.common import (
+    render_hosted_demo_empty_state,
+    research_pick_button,
+    universe_label,
+)
 from stock_platform.ui.components.layout import render_page_shell
 from stock_platform.ui.components.price_chart import build_price_chart
 
@@ -125,6 +129,7 @@ if run_scan:
 latest_run = fetch_latest_strategy_scan(universe)
 
 if latest_run is None:
+    render_hosted_demo_empty_state(page="Strategy Scanner")
     st.info(
         "Run a scan to see EMA stack, RSI momentum, and EMA pullback setups from "
         "your saved EOD database."

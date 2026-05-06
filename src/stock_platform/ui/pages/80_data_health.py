@@ -8,6 +8,7 @@ import streamlit as st
 from stock_platform.analytics.scanner import list_available_universes
 from stock_platform.jobs.refresh_eod_candles import RefreshSummary, refresh_eod_candles
 from stock_platform.ops import build_data_health_report
+from stock_platform.ui.components.common import render_hosted_demo_empty_state
 from stock_platform.ui.components.layout import render_page_shell
 
 render_page_shell(
@@ -17,6 +18,13 @@ render_page_shell(
 
 report = build_data_health_report()
 latest_run = report.recent_refresh_runs[0] if report.recent_refresh_runs else None
+
+if (
+    latest_run is None
+    and report.price_coverage is not None
+    and report.price_coverage.total_rows == 0
+):
+    render_hosted_demo_empty_state(page="Data Health", show_data_health_link=False)
 
 
 def _summary_frame(summary: RefreshSummary) -> pd.DataFrame:

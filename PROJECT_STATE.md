@@ -631,3 +631,4 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
   - Verified `render.yaml` parses successfully and that Render-style env vars load through `stock_platform.config`.
   - Focused tests passed: 24 tests across strategy result schema, strategy scan persistence, and universe scanner.
   - Hardened the Render start command to use `bash -lc`, `python -m streamlit`, explicit `$PORT` expansion, Render-friendly Streamlit server flags, and the Streamlit `/_stcore/health` health check.
+  - Added hosted-demo empty states for Market Today, Strategy Scanner, and Data Health so fresh Render Free deployments explain the temporary database and first-refresh workflow clearly.

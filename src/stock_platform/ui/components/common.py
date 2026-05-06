@@ -11,7 +11,7 @@ import streamlit as st
 
 from stock_platform.analytics.scanner import list_available_universes, load_universe
 from stock_platform.auth import save_kite_access_token
-from stock_platform.config import ROOT_DIR, get_thresholds_config, get_universe_config
+from stock_platform.config import ROOT_DIR, get_settings, get_thresholds_config, get_universe_config
 
 GLOSSARY = {
     "RSI 14": "Relative Strength Index over 14 periods. Above 70 is often stretched; below 30 is often oversold.",
@@ -278,3 +278,42 @@ def save_kite_access_token_locally(access_token: str) -> Path:
 
 def date_range_caption(start: date, end: date) -> str:
     return f"{start.isoformat()} to {end.isoformat()}"
+
+
+def is_hosted_demo_mode() -> bool:
+    """Return True for the free hosted demo configuration.
+
+    This intentionally keys off safe public configuration only. It does not
+    inspect secrets and does not require reading `.env` contents.
+    """
+    settings = get_settings()
+    database_url = settings.database_url.replace("\\", "/").strip().lower()
+    return (
+        settings.app_env.lower() == "production"
+        and database_url == "sqlite:///data/stock_platform.db"
+        and settings.market_data_provider.lower() == "yfinance"
+        and not settings.enable_kite_market_data
+    )
+
+
+def render_hosted_demo_empty_state(*, page: str, show_data_health_link: bool = True) -> None:
+    """Render a compact empty-state note for the Render free demo."""
+    if not is_hosted_demo_mode():
+        return
+
+    st.info(
+        f"{page} is running on the free hosted demo database. Fresh Render deployments start "
+        "empty, and saved refreshes/scanner rows can reset after redeploys, restarts, or idle "
+        "spin-down. This is expected for the free public demo."
+    )
+    st.caption(
+        "For a quick demo, open Data Health, run a small dry run first, then run a 5-symbol "
+        "EOD refresh with yfinance. Keep Kite disabled on the public deployment. Research aid "
+        "only, not investment advice."
+    )
+    if show_data_health_link:
+        st.page_link(
+            "pages/80_data_health.py",
+            label="Open Data Health refresh controls",
+            icon=":material/health_and_safety:",
+        )

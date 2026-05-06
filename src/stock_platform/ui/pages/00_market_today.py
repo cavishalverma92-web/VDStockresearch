@@ -11,7 +11,7 @@ from stock_platform.data.providers import MarketDataProvider
 from stock_platform.data.repositories import fetch_market_flows
 from stock_platform.db import get_session
 from stock_platform.ops import build_market_today_summary
-from stock_platform.ui.components.common import research_pick_button
+from stock_platform.ui.components.common import render_hosted_demo_empty_state, research_pick_button
 from stock_platform.ui.components.layout import render_page_shell
 
 render_page_shell(
@@ -64,6 +64,13 @@ if banner:
     color = "red" if any(c == "red" for c, _ in banner) else "amber"
     msg = " · ".join(m for _, m in banner)
     (st.error if color == "red" else st.warning)(msg)
+
+if (
+    latest_run is None
+    and health.composite_score_coverage is not None
+    and health.composite_score_coverage.total_rows == 0
+):
+    render_hosted_demo_empty_state(page="Market Today")
 
 st.divider()
 
