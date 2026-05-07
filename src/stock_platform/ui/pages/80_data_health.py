@@ -8,7 +8,7 @@ import streamlit as st
 from stock_platform.analytics.scanner import list_available_universes
 from stock_platform.jobs.refresh_eod_candles import RefreshSummary, refresh_eod_candles
 from stock_platform.ops import build_data_health_report
-from stock_platform.ui.components.common import render_hosted_demo_empty_state
+from stock_platform.ui.components.common import is_hosted_demo_mode, render_hosted_demo_empty_state
 from stock_platform.ui.components.layout import render_page_shell
 
 render_page_shell(
@@ -47,6 +47,40 @@ def _summary_frame(summary: RefreshSummary) -> pd.DataFrame:
             for outcome in summary.outcomes
         ]
     )
+
+
+def _render_refresh_summary(summary: RefreshSummary) -> None:
+    st.success(
+        "Dry run completed." if summary.dry_run else f"Refresh run #{summary.run_id} completed."
+    )
+    run_cols = st.columns(5)
+    run_cols[0].metric("Requested", summary.requested_symbols)
+    run_cols[1].metric("Successful", summary.successful_symbols)
+    run_cols[2].metric("Failed", summary.failed_symbols)
+    run_cols[3].metric("Price rows", summary.price_rows_upserted)
+    run_cols[4].metric("Scores", summary.composite_scores_saved)
+    st.dataframe(_summary_frame(summary), width="stretch", hide_index=True)
+
+
+if is_hosted_demo_mode():
+    st.subheader("Hosted Demo Quick Start")
+    st.caption(
+        "Use this on Render Free to seed a small temporary database. It refreshes only the "
+        "first 5 Nifty 50 symbols with yfinance market data. No Kite, portfolio, holdings, "
+        "funds, orders, or trading APIs are used."
+    )
+    if st.button("Run 5-symbol demo refresh", type="primary"):
+        with st.spinner("Running a small hosted demo refresh..."):
+            demo_summary = refresh_eod_candles(
+                universe="nifty_50",
+                max_symbols=5,
+                initial_history_days=450,
+                incremental_overlap_days=5,
+                dry_run=False,
+                note="hosted demo refresh from Data Health",
+            )
+        _render_refresh_summary(demo_summary)
+    st.divider()
 
 
 st.subheader("Run Daily EOD Refresh")
@@ -111,16 +145,7 @@ else:
                 dry_run=bool(dry_run),
                 note=note,
             )
-        st.success(
-            "Dry run completed." if summary.dry_run else f"Refresh run #{summary.run_id} completed."
-        )
-        run_cols = st.columns(5)
-        run_cols[0].metric("Requested", summary.requested_symbols)
-        run_cols[1].metric("Successful", summary.successful_symbols)
-        run_cols[2].metric("Failed", summary.failed_symbols)
-        run_cols[3].metric("Price rows", summary.price_rows_upserted)
-        run_cols[4].metric("Scores", summary.composite_scores_saved)
-        st.dataframe(_summary_frame(summary), width="stretch", hide_index=True)
+        _render_refresh_summary(summary)
 
 st.divider()
 

@@ -82,6 +82,20 @@ expire and may need daily refresh. The hosted app should still avoid trading,
 portfolio, holdings, positions, funds, margins, order placement, order
 modification, and order cancellation APIs.
 
+The Settings page includes a Kite market-data connection panel that checks
+whether the hosted app sees the required environment variables without showing
+their values.
+
+## Hosted Demo Refresh
+
+On Render Free, Data Health shows a **Run 5-symbol demo refresh** button. It
+seeds the temporary hosted SQLite database with a small Nifty 50 sample using
+yfinance. This is useful for checking Market Today and Strategy Scanner online.
+
+The demo refresh does not use Kite, portfolio, holdings, funds, orders, or
+trading APIs. Because Render Free storage is temporary, the refreshed rows can
+reset after redeploys, restarts, or idle spin-down.
+
 ## Build And Start Commands
 
 Build:

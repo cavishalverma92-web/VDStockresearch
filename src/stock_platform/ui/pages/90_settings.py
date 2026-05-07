@@ -6,9 +6,9 @@ import streamlit as st
 
 from stock_platform.auth import clear_kite_access_token, load_kite_access_token
 from stock_platform.config import ROOT_DIR, get_settings
-from stock_platform.data.providers import KiteProvider, KiteProviderError
+from stock_platform.data.providers import KiteProvider, KiteProviderError, MarketDataProvider
 from stock_platform.ops import run_health_checks
-from stock_platform.ui.components.common import save_kite_access_token_locally
+from stock_platform.ui.components.common import is_hosted_demo_mode, save_kite_access_token_locally
 from stock_platform.ui.components.layout import render_page_shell
 
 render_page_shell(
@@ -26,6 +26,12 @@ st.subheader("Zerodha API Setup")
 st.warning("No portfolio, holdings, funds, margins, orders, trades, or trading APIs are enabled.")
 st.caption("Kite is used only for market data and instrument metadata. yfinance remains fallback.")
 
+if is_hosted_demo_mode():
+    st.info(
+        "This Render Free deployment is currently using yfinance only. Kite can be connected "
+        "later through Render environment variables, but keep the public app market-data-only."
+    )
+
 status_cols = st.columns(3)
 status_cols[0].metric("KITE_API_KEY", "Yes" if settings.kite_api_key.strip() else "No")
 status_cols[1].metric("KITE_API_SECRET", "Yes" if settings.kite_api_secret.strip() else "No")
@@ -37,6 +43,38 @@ flag_cols[0].metric(
 )
 flag_cols[1].metric("Kite trading", "Disabled")
 flag_cols[2].metric("Kite portfolio", "Disabled")
+
+router_status = MarketDataProvider().status()
+with st.expander("Kite market-data connection on Render", expanded=is_hosted_demo_mode()):
+    st.caption(
+        "Use this only if you want the hosted app to fetch market data through Zerodha Kite. "
+        "Never paste API keys, API secrets, access tokens, or request tokens into GitHub files "
+        "or chat. Add them only in Render's Environment tab."
+    )
+    st.dataframe(
+        [
+            {"setting": "MARKET_DATA_PROVIDER", "safe value": "kite or auto"},
+            {"setting": "ENABLE_KITE_MARKET_DATA", "safe value": "true"},
+            {"setting": "ENABLE_KITE_TRADING", "safe value": "false"},
+            {"setting": "ENABLE_KITE_PORTFOLIO", "safe value": "false"},
+            {"setting": "KITE_API_KEY", "safe value": "set secretly in Render"},
+            {"setting": "KITE_API_SECRET", "safe value": "set secretly in Render"},
+            {"setting": "KITE_ACCESS_TOKEN", "safe value": "set secretly in Render; expires"},
+        ],
+        width="stretch",
+        hide_index=True,
+    )
+    st.warning(
+        "Do not enable Kite trading or portfolio flags on the hosted app. Access tokens expire; "
+        "if Kite fails, the provider router should fall back to yfinance when configured as auto."
+    )
+    status_frame = [
+        {"check": "Selected provider", "value": router_status["selected"]},
+        {"check": "Kite market-data flag", "value": router_status["kite_enabled"]},
+        {"check": "API key + secret present", "value": router_status["kite_configured"]},
+        {"check": "Access token present", "value": router_status["kite_access_token"]},
+    ]
+    st.dataframe(status_frame, width="stretch", hide_index=True)
 
 if token.strip():
     st.info(

@@ -632,3 +632,4 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
   - Focused tests passed: 24 tests across strategy result schema, strategy scan persistence, and universe scanner.
   - Hardened the Render start command to use `bash -lc`, `python -m streamlit`, explicit `$PORT` expansion, Render-friendly Streamlit server flags, and the Streamlit `/_stcore/health` health check.
   - Added hosted-demo empty states for Market Today, Strategy Scanner, and Data Health so fresh Render Free deployments explain the temporary database and first-refresh workflow clearly.
+  - Added a Render Free "Run 5-symbol demo refresh" button on Data Health and a Settings panel for Kite market-data-only environment setup on Render.
