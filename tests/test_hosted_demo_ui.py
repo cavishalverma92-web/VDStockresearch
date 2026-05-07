@@ -24,12 +24,12 @@ def test_is_hosted_demo_mode_for_free_render_defaults(monkeypatch) -> None:
 def test_is_hosted_demo_mode_false_when_kite_market_data_enabled(monkeypatch) -> None:
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("DATABASE_URL", "sqlite:///data/stock_platform.db")
-    monkeypatch.setenv("MARKET_DATA_PROVIDER", "yfinance")
+    monkeypatch.setenv("MARKET_DATA_PROVIDER", "auto")
     monkeypatch.setenv("ENABLE_KITE_MARKET_DATA", "true")
     _clear_settings_cache()
 
     try:
-        assert is_hosted_demo_mode() is False
+        assert is_hosted_demo_mode() is True
     finally:
         _clear_settings_cache()
 

@@ -27,12 +27,18 @@ services:
       - key: PROCESSED_DIR
         value: data/processed
       - key: MARKET_DATA_PROVIDER
-        value: yfinance
+        value: auto
       - key: PROVIDER_PRICE
         value: yfinance
       - key: ENABLE_KITE_MARKET_DATA
-        value: false
+        value: true
       - key: ENABLE_KITE_TRADING
         value: false
       - key: ENABLE_KITE_PORTFOLIO
         value: false
+      - key: KITE_API_KEY
+        sync: false
+      - key: KITE_API_SECRET
+        sync: false
+      - key: KITE_ACCESS_TOKEN
+        sync: false

@@ -291,8 +291,7 @@ def is_hosted_demo_mode() -> bool:
     return (
         settings.app_env.lower() == "production"
         and database_url == "sqlite:///data/stock_platform.db"
-        and settings.market_data_provider.lower() == "yfinance"
-        and not settings.enable_kite_market_data
+        and settings.market_data_provider.lower() in {"yfinance", "auto", "kite"}
     )
 
 

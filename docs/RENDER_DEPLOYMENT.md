@@ -55,22 +55,26 @@ DATABASE_URL=sqlite:///data/stock_platform.db
 CACHE_DIR=data/cache
 RAW_DIR=data/raw
 PROCESSED_DIR=data/processed
-MARKET_DATA_PROVIDER=yfinance
+MARKET_DATA_PROVIDER=auto
 PROVIDER_PRICE=yfinance
-ENABLE_KITE_MARKET_DATA=false
+ENABLE_KITE_MARKET_DATA=true
 ENABLE_KITE_TRADING=false
 ENABLE_KITE_PORTFOLIO=false
+KITE_API_KEY=<secret value in Render>
+KITE_API_SECRET=<secret value in Render>
+KITE_ACCESS_TOKEN=<secret value in Render; expires>
 ```
 
 Do not commit `.env`. Do not paste Zerodha secrets into repo files.
 
 ## Optional Kite Market Data
 
-For a private/internal deployment only, Kite market data can be enabled later
-from the Render dashboard by setting:
+For a private/internal deployment only, Kite market data is enabled through the
+provider router with yfinance fallback. Add the secret values from the Render
+dashboard:
 
 ```text
-MARKET_DATA_PROVIDER=kite
+MARKET_DATA_PROVIDER=auto
 ENABLE_KITE_MARKET_DATA=true
 KITE_API_KEY=<set in Render dashboard>
 KITE_API_SECRET=<set in Render dashboard>
