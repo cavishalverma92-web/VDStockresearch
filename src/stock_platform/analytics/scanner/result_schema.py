@@ -28,6 +28,7 @@ DEFAULT_STRATEGY_SCAN_COLUMNS = [
     "relative_volume",
     "liquidity_status",
     "data_trust",
+    "data_source",
     "data_freshness",
     "confidence_score",
     "why_this_appeared",
@@ -37,7 +38,6 @@ DEFAULT_STRATEGY_SCAN_COLUMNS = [
 
 ADVANCED_STRATEGY_SCAN_COLUMNS = [
     "atr_pct",
-    "data_source",
     "market_cap_bucket",
     "ema_20",
     "ema_50",

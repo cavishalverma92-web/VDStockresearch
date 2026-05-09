@@ -59,6 +59,15 @@ def _render_refresh_summary(summary: RefreshSummary) -> None:
     run_cols[2].metric("Failed", summary.failed_symbols)
     run_cols[3].metric("Price rows", summary.price_rows_upserted)
     run_cols[4].metric("Scores", summary.composite_scores_saved)
+    source_counts: dict[str, int] = {}
+    for outcome in summary.outcomes:
+        source = outcome.source or "not returned"
+        source_counts[source] = source_counts.get(source, 0) + 1
+    if source_counts:
+        source_text = " | ".join(
+            f"{source}: {count}" for source, count in sorted(source_counts.items())
+        )
+        st.caption(f"Provider source mix for this run: {source_text}")
     st.dataframe(_summary_frame(summary), width="stretch", hide_index=True)
 
 
@@ -152,8 +161,10 @@ st.divider()
 cols = st.columns(4)
 cols[0].metric("Last refresh", f"#{latest_run.run_id}" if latest_run else "None")
 cols[1].metric("Refresh status", latest_run.status.title() if latest_run else "No refresh")
-cols[2].metric("Kite token", "Configured" if report.kite_token.configured else "Missing")
-cols[3].metric("Generated", report.generated_at.strftime("%H:%M:%S"))
+cols[2].metric("Latest source", latest_run.source if latest_run else "N/A")
+cols[3].metric("Kite token", "Configured" if report.kite_token.configured else "Missing")
+
+st.caption(f"Data Health generated at {report.generated_at.strftime('%H:%M:%S')}")
 
 coverage_cols = st.columns(3)
 price = report.price_coverage
@@ -173,6 +184,7 @@ else:
                 {
                     "run_id": run.run_id,
                     "universe": run.universe,
+                    "source": run.source,
                     "status": run.status,
                     "successful": run.successful_symbols,
                     "failed": run.failed_symbols,
@@ -249,9 +261,20 @@ else:
 
 st.subheader("Source Mix")
 if price and price.by_source:
+    total_rows = max(1, int(price.total_rows))
     st.dataframe(
         pd.DataFrame(
-            [{"source": source, "rows": rows} for source, rows in price.by_source.items()]
+            [
+                {
+                    "source": source,
+                    "rows": rows,
+                    "share_pct": round((int(rows) / total_rows) * 100, 1),
+                    "preferred": "Yes" if str(source).lower() == "kite" else "Fallback/other",
+                }
+                for source, rows in sorted(
+                    price.by_source.items(), key=lambda item: item[1], reverse=True
+                )
+            ]
         ),
         width="stretch",
         hide_index=True,

@@ -72,6 +72,26 @@ if (
 ):
     render_hosted_demo_empty_state(page="Market Today")
 
+price_coverage = health.price_coverage
+if price_coverage and price_coverage.total_rows:
+    st.caption("Persisted market-data source mix")
+    source_total = max(1, int(price_coverage.total_rows))
+    mix_cols = st.columns(4)
+    source_rows = sorted(
+        price_coverage.by_source.items(),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+    for idx, (source, rows) in enumerate(source_rows[:4]):
+        pct = (int(rows) / source_total) * 100
+        mix_cols[idx].metric(str(source).title(), f"{int(rows):,}", delta=f"{pct:.1f}%")
+    if len(source_rows) > 4:
+        st.caption(
+            "Other sources: " + ", ".join(f"{source} {rows:,}" for source, rows in source_rows[4:])
+        )
+else:
+    st.caption("Persisted market-data source mix will appear after the first refresh.")
+
 st.divider()
 
 # --- What changed today (single tabbed panel) ---------------------------------

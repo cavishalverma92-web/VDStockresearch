@@ -92,6 +92,7 @@ def test_strategy_results_to_frame_has_default_and_advanced_columns():
     assert frame.iloc[0]["symbol"] == "RELIANCE.NS"
     assert frame.iloc[0]["entry_zone"] == "INR 1390.00 - 1405.00"
     assert "why_this_appeared" in frame.columns
+    assert "data_source" in frame.columns[:20]
     assert "ema_200" in frame.columns
 
 

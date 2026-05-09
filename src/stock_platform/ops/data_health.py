@@ -45,6 +45,7 @@ class RefreshRunSummary:
 
     run_id: int
     universe: str
+    source: str
     status: str
     started_at: datetime | None
     finished_at: datetime | None
@@ -227,6 +228,7 @@ def _recent_refresh_runs(
             RefreshRunSummary(
                 run_id=int(row.id),
                 universe=row.universe_name,
+                source=row.source,
                 status=row.status,
                 started_at=row.started_at,
                 finished_at=finished,
