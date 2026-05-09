@@ -50,6 +50,55 @@ def _result_option_label(row: pd.Series) -> str:
     )
 
 
+def _has_text(frame: pd.DataFrame, column: str) -> pd.Series:
+    if column not in frame.columns:
+        return pd.Series(False, index=frame.index)
+    return frame[column].fillna("").astype(str).str.strip().ne("")
+
+
+def _quality_views(frame: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    """Split scanner rows into practical review buckets."""
+    if frame.empty:
+        return {
+            "Clean setups": frame,
+            "Needs review": frame,
+            "Do not trust": frame,
+            "All rows": frame,
+        }
+
+    trust = frame.get("data_trust", pd.Series("", index=frame.index)).fillna("").astype(str)
+    liquidity = (
+        frame.get("liquidity_status", pd.Series("", index=frame.index)).fillna("").astype(str)
+    )
+    has_fallback = _has_text(frame, "provider_fallback_reason")
+    is_untrusted = trust.eq("Do not trust signal") | liquidity.eq("Low")
+    is_clean = trust.eq("Good data") & liquidity.eq("Pass") & ~has_fallback
+    needs_review = ~is_clean & ~is_untrusted
+
+    return {
+        "Clean setups": frame[is_clean].copy(),
+        "Needs review": frame[needs_review].copy(),
+        "Do not trust": frame[is_untrusted].copy(),
+        "All rows": frame.copy(),
+    }
+
+
+def _source_counts(frame: pd.DataFrame) -> tuple[int, int, int]:
+    sources = frame.get("data_source", pd.Series("", index=frame.index)).fillna("").astype(str)
+    kite_rows = int(sources.str.lower().eq("kite").sum())
+    fallback_rows = int(_has_text(frame, "provider_fallback_reason").sum())
+    freshness = frame.get("data_freshness", pd.Series("", index=frame.index))
+    stale_rows = int(freshness.fillna("").astype(str).str.strip().eq("").sum())
+    return kite_rows, fallback_rows, stale_rows
+
+
+def _render_result_tab(frame: pd.DataFrame, columns: list[str], *, key: str) -> None:
+    if frame.empty:
+        st.info("No rows in this review bucket after the current filters.")
+        return
+    research_pick_button(frame[columns], key=key)
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def _load_strategy_chart_data(symbol: str) -> tuple[pd.DataFrame, pd.DataFrame, str, str]:
     with get_session() as session:
@@ -165,6 +214,14 @@ else:
     card_row_2[2].metric("Top strategy", summary_cards.top_strategy)
     card_row_2[3].metric("Top strategy rows", summary_cards.top_strategy_count)
 
+    source_card_row = st.columns(4)
+    all_kite, all_fallback, all_stale = _source_counts(frame)
+    source_card_row[0].metric("Kite sourced", all_kite)
+    source_card_row[1].metric("Fallback warnings", all_fallback)
+    source_card_row[2].metric("Missing freshness", all_stale)
+    source_types = frame.get("data_source", pd.Series(dtype="object")).dropna().nunique()
+    source_card_row[3].metric("Source types", source_types)
+
     filters = st.columns([2, 1, 1, 1])
     with filters[0]:
         selected_strategies = st.multiselect(
@@ -248,10 +305,37 @@ else:
     default_cols = [column for column in DEFAULT_STRATEGY_SCAN_COLUMNS if column in filtered]
     st.subheader("Strategy Results")
     st.caption(
-        "Default filters hide low-liquidity and do-not-trust rows. Expand filters to review "
-        "them manually; this is still a research aid, not investment advice."
+        "Clean setups require Good data, liquidity Pass, and no provider fallback warning. "
+        "Other rows stay visible for audit, but should be reviewed more cautiously."
     )
-    research_pick_button(filtered[default_cols], key="strategy_scanner_results")
+    quality_views = _quality_views(filtered)
+    clean_view = quality_views["Clean setups"]
+    review_view = quality_views["Needs review"]
+    untrusted_view = quality_views["Do not trust"]
+    all_view = quality_views["All rows"]
+
+    quality_cards = st.columns(4)
+    quality_cards[0].metric("Clean after filters", len(clean_view))
+    quality_cards[1].metric("Needs review", len(review_view))
+    quality_cards[2].metric("Do not trust", len(untrusted_view))
+    quality_cards[3].metric("All filtered rows", len(all_view))
+
+    tab_clean, tab_review, tab_untrusted, tab_all = st.tabs(
+        [
+            f"Clean setups ({len(clean_view)})",
+            f"Needs review ({len(review_view)})",
+            f"Do not trust ({len(untrusted_view)})",
+            f"All rows ({len(all_view)})",
+        ]
+    )
+    with tab_clean:
+        _render_result_tab(clean_view, default_cols, key="strategy_clean_results")
+    with tab_review:
+        _render_result_tab(review_view, default_cols, key="strategy_review_results")
+    with tab_untrusted:
+        _render_result_tab(untrusted_view, default_cols, key="strategy_untrusted_results")
+    with tab_all:
+        _render_result_tab(all_view, default_cols, key="strategy_all_results")
 
     result_lookup = {
         _result_key(result.symbol, result.strategy, result.signal_date): result

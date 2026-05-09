@@ -636,3 +636,4 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
   - Switched Render market-data routing to `auto`, enabled Kite market-data flag, added secret-only Kite env slots, and kept trading/portfolio flags disabled.
   - Added provider source visibility across Market Today, Data Health refresh output, Data Health source mix, and the default Strategy Scanner results table.
   - Added per-symbol provider fallback audit to EOD refresh outcomes and Data Health refresh output, so Kite-to-yfinance fallback warnings are visible immediately after a refresh.
+  - Improved Strategy Scanner review workflow with Clean setups, Needs review, Do not trust, and All rows tabs plus Kite/fallback/freshness source summary cards.
