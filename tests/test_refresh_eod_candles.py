@@ -37,10 +37,12 @@ class _FakeRouter:
         self,
         *,
         source: str = "kite",
+        fallback_reason: str = "",
         fail_for: set[str] | None = None,
         empty_for: set[str] | None = None,
     ) -> None:
         self.source = source
+        self.last_warning = fallback_reason
         self.fail_for = fail_for or set()
         self.empty_for = empty_for or set()
         self.calls: list[tuple[str, date, date]] = []
@@ -79,6 +81,7 @@ class _FakeRouter:
         frame.index.name = "date"
         frame.attrs["source"] = self.source
         frame.attrs["provider_label"] = self.source
+        frame.attrs["fallback_reason"] = self.last_warning
         return frame
 
 
@@ -183,6 +186,26 @@ def test_refresh_records_no_rows_returned_as_error(engine) -> None:
     assert summary.successful_symbols == 0
     assert summary.failed_symbols == 1
     assert "no rows" in (summary.outcomes[0].error or "")
+
+
+def test_refresh_records_provider_fallback_reason(engine) -> None:
+    router = _FakeRouter(
+        source="yfinance",
+        fallback_reason="Kite data unavailable; using yfinance fallback. Token expired.",
+    )
+
+    summary = refresh_eod_candles(
+        universe=["RELIANCE.NS"],
+        market_data_provider=router,
+        engine=engine,
+        end_date=date(2026, 5, 1),
+        initial_history_days=60,
+        splits_fetcher=_no_splits,
+    )
+
+    outcome = summary.outcomes[0]
+    assert outcome.source == "yfinance"
+    assert "Token expired" in outcome.provider_fallback_reason
 
 
 def test_refresh_uses_overlap_window_on_second_run(engine) -> None:

@@ -38,6 +38,7 @@ def _summary_frame(summary: RefreshSummary) -> pd.DataFrame:
                     else ("skipped" if outcome.skipped_reason else "completed")
                 ),
                 "source": outcome.source,
+                "fallback_reason": outcome.provider_fallback_reason,
                 "fetched_rows": outcome.fetched_rows,
                 "price_rows": outcome.price_rows_inserted + outcome.price_rows_updated,
                 "indicator_rows": outcome.technical_rows_inserted + outcome.technical_rows_updated,
@@ -68,6 +69,12 @@ def _render_refresh_summary(summary: RefreshSummary) -> None:
             f"{source}: {count}" for source, count in sorted(source_counts.items())
         )
         st.caption(f"Provider source mix for this run: {source_text}")
+    fallback_count = sum(1 for outcome in summary.outcomes if outcome.provider_fallback_reason)
+    if fallback_count:
+        st.warning(
+            f"{fallback_count} symbol(s) used provider fallback or had a provider warning. "
+            "Review the fallback_reason column before trusting scanner output."
+        )
     st.dataframe(_summary_frame(summary), width="stretch", hide_index=True)
 
 

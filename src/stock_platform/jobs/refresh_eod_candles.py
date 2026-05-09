@@ -76,6 +76,7 @@ class SymbolRefreshOutcome:
 
     symbol: str
     source: str | None
+    provider_fallback_reason: str
     start_date: date | None
     end_date: date | None
     fetched_rows: int
@@ -308,6 +309,7 @@ def _refresh_one(
             return SymbolRefreshOutcome(
                 symbol=cleaned,
                 source=None,
+                provider_fallback_reason="",
                 start_date=start,
                 end_date=end_date,
                 fetched_rows=0,
@@ -323,12 +325,14 @@ def _refresh_one(
             )
 
         frame = provider.get_ohlcv(cleaned, start=start, end=end_date)
-        source = str(frame.attrs.get("source") or "unknown")
+        fallback_reason = _provider_fallback_reason(provider, frame)
+        source = "unknown" if frame is None else str(frame.attrs.get("source") or "unknown")
 
         if frame is None or frame.empty:
             return SymbolRefreshOutcome(
                 symbol=cleaned,
                 source=source,
+                provider_fallback_reason=fallback_reason,
                 start_date=start,
                 end_date=end_date,
                 fetched_rows=0,
@@ -349,6 +353,7 @@ def _refresh_one(
             return SymbolRefreshOutcome(
                 symbol=cleaned,
                 source=source,
+                provider_fallback_reason=fallback_reason,
                 start_date=start,
                 end_date=end_date,
                 fetched_rows=len(frame),
@@ -391,6 +396,7 @@ def _refresh_one(
         return SymbolRefreshOutcome(
             symbol=cleaned,
             source=source,
+            provider_fallback_reason=fallback_reason,
             start_date=start,
             end_date=end_date,
             fetched_rows=len(frame),
@@ -405,10 +411,12 @@ def _refresh_one(
         )
 
     except Exception as exc:
+        fallback_reason = _provider_fallback_reason(provider)
         log.warning("refresh_eod_candles failed for {}: {}", cleaned, exc)
         return SymbolRefreshOutcome(
             symbol=cleaned,
             source=None,
+            provider_fallback_reason=fallback_reason,
             start_date=None,
             end_date=end_date,
             fetched_rows=0,
@@ -422,6 +430,18 @@ def _refresh_one(
             duration_seconds=round(time.perf_counter() - started, 3),
             error=str(exc),
         )
+
+
+def _provider_fallback_reason(
+    provider: MarketDataProvider,
+    frame: pd.DataFrame | None = None,
+) -> str:
+    """Return a safe provider fallback/warning message for a refresh outcome."""
+    if frame is not None:
+        frame_reason = str(frame.attrs.get("fallback_reason") or "").strip()
+        if frame_reason:
+            return frame_reason
+    return str(getattr(provider, "last_warning", "") or "").strip()
 
 
 def _persist_latest_composite_score(
@@ -560,6 +580,8 @@ def _print_progress(done: int, total: int, symbol: str, outcome: SymbolRefreshOu
             f"+{outcome.technical_rows_inserted}t/{outcome.technical_rows_updated}u"
             f"{score_part}"
         )
+        if outcome.provider_fallback_reason:
+            status += " fallback=Y"
     print(f"[{done:>4}/{total}] {symbol:<20} {status}")
 
 
