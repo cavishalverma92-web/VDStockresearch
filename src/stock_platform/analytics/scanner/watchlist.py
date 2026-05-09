@@ -26,6 +26,9 @@ def add_symbols_to_watchlist(
     source_universe: str | None = None,
     source_run_id: int | None = None,
     reason: str | None = None,
+    review_status: str = "watch",
+    tags: str | None = None,
+    notes: str | None = None,
     engine: Engine | None = None,
 ) -> int:
     """Add or reactivate symbols in the local research shortlist.
@@ -58,7 +61,9 @@ def add_symbols_to_watchlist(
                         source_universe=source_universe,
                         source_run_id=source_run_id,
                         reason=reason,
-                        review_status="watch",
+                        review_status=_normalize_review_status(review_status),
+                        tags=_safe_text(tags)[:240],
+                        notes=_safe_text(notes),
                         active=True,
                     )
                 )
@@ -67,6 +72,9 @@ def add_symbols_to_watchlist(
             existing.source_universe = source_universe or existing.source_universe
             existing.source_run_id = source_run_id or existing.source_run_id
             existing.reason = reason or existing.reason
+            existing.review_status = _normalize_review_status(review_status)
+            existing.tags = _merge_tags(existing.tags, tags)
+            existing.notes = _merge_notes(existing.notes, notes)
             existing.active = True
             existing.updated_at = utc_now()
 
@@ -281,3 +289,29 @@ def _safe_text(value: object) -> str:
     if value is None or pd.isna(value):
         return ""
     return str(value).strip()
+
+
+def _merge_tags(existing: object, new: object) -> str:
+    current = [part.strip() for part in _safe_text(existing).split(",") if part.strip()]
+    incoming = [part.strip() for part in _safe_text(new).split(",") if part.strip()]
+    merged: list[str] = []
+    seen: set[str] = set()
+    for tag in [*current, *incoming]:
+        key = tag.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(tag)
+    return ", ".join(merged)[:240]
+
+
+def _merge_notes(existing: object, new: object) -> str:
+    current = _safe_text(existing)
+    incoming = _safe_text(new)
+    if not incoming:
+        return current
+    if not current:
+        return incoming
+    if incoming in current:
+        return current
+    return f"{current}\n{incoming}"

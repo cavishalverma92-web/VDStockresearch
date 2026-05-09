@@ -22,6 +22,7 @@ from stock_platform.analytics.fundamentals import (
     is_financial_sector,
 )
 from stock_platform.analytics.fundamentals.summary import build_fundamentals_summary
+from stock_platform.analytics.scanner.watchlist import add_symbols_to_watchlist
 from stock_platform.config import get_settings, get_universe_config
 from stock_platform.data.providers import CsvFundamentalsProvider, YFinanceFundamentalsProvider
 from stock_platform.data.providers.corporate_actions import (
@@ -196,6 +197,28 @@ with focus_right:
     st.markdown("##### Verify before relying")
     for item in cons[:3]:
         st.markdown(f"- {item}")
+
+watch_col, watch_note_col = st.columns([1, 3])
+with watch_col:
+    if st.button("Add to Watchlist", type="primary", key="stock_research_add_watchlist"):
+        reason = f"Stock Research: {stance}. {detail}"
+        tags = ["stock-research", f"trust-{trust_level.lower()}"]
+        tags.extend(active[:3])
+        notes = "Verify before relying: " + " | ".join(cons[:3])
+        added = add_symbols_to_watchlist(
+            [symbol],
+            source_universe="stock_research",
+            reason=reason,
+            review_status="deep_dive" if trust_level == "High" and active else "watch",
+            tags=", ".join(tags),
+            notes=notes,
+        )
+        st.success(f"Saved {added} research candidate to Watchlist.")
+with watch_note_col:
+    st.caption(
+        "Watchlist is a review queue for research candidates only. "
+        "No trading, portfolio, holdings, funds, or order APIs are used."
+    )
 
 tab_overview, tab_chart, tab_fund, tab_tech, tab_flows = st.tabs(
     ["Overview", "Chart", "Fundamentals", "Technicals & signals", "Flows & events"]

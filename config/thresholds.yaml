@@ -28,6 +28,12 @@ signals:
     shorter_lookback_days: 120       # multi-month high when 252 bars are unavailable
     max_extension_pct: 6.0           # avoid chasing far above breakout level
 
+  high_breakout:
+    relative_volume_floor: 1.2       # lighter confirmation than strict breakout-with-volume
+    lookback_days_for_high: 252
+    shorter_lookback_days: 120
+    max_extension_pct: 4.0
+
   darvas_base_breakout:
     min_consolidation_days: 20
     max_range_pct: 10.0

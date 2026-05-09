@@ -71,7 +71,10 @@ def build_strategy_context(
 
 def evaluate_default_strategies(context: StrategyContext) -> list[StrategyScanResult]:
     """Evaluate the first MVP strategy set for one symbol."""
-    from stock_platform.analytics.strategies.breakout import BreakoutWithVolumeStrategy
+    from stock_platform.analytics.strategies.breakout import (
+        BreakoutWithVolumeStrategy,
+        HighBreakoutStrategy,
+    )
     from stock_platform.analytics.strategies.ema_pullback import EmaPullbackStrategy
     from stock_platform.analytics.strategies.ema_stack import EmaStackStrategy
     from stock_platform.analytics.strategies.rsi_momentum import RsiMomentumStrategy
@@ -81,6 +84,7 @@ def evaluate_default_strategies(context: StrategyContext) -> list[StrategyScanRe
         RsiMomentumStrategy(),
         EmaPullbackStrategy(),
         BreakoutWithVolumeStrategy(),
+        HighBreakoutStrategy(),
     ]
     results: list[StrategyScanResult] = []
     for strategy in strategies:

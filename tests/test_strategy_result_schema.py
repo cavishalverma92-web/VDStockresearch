@@ -59,6 +59,25 @@ def _breakout_frame(days: int = 260) -> pd.DataFrame:
     )
 
 
+def _moderate_high_breakout_frame(days: int = 260) -> pd.DataFrame:
+    idx = pd.date_range(end=date.today(), periods=days, freq="B")
+    close = np.linspace(100, 130, days)
+    high = close + 1.0
+    close[-1] = 135.0
+    high[-1] = 136.0
+    return pd.DataFrame(
+        {
+            "open": close - 0.75,
+            "high": high,
+            "low": close - 1.5,
+            "close": close,
+            "adj_close": close,
+            "volume": [1_000_000] * (days - 1) + [1_600_000],
+        },
+        index=idx,
+    )
+
+
 def test_strategy_results_to_frame_has_default_and_advanced_columns():
     result = StrategyScanResult(
         symbol="RELIANCE.NS",
@@ -188,3 +207,20 @@ def test_scan_persisted_strategy_universe_finds_breakout_with_volume():
     assert breakout.relative_volume is not None
     assert breakout.relative_volume >= 2.0
     assert breakout.data_trust in {"Good data", "Warning"}
+
+
+def test_scan_persisted_strategy_universe_finds_high_breakout_without_strict_volume():
+    engine = get_engine("sqlite:///:memory:")
+    create_all_tables(engine)
+    with get_session(engine) as session:
+        upsert_price_daily(session, "HIGHBRK.NS", _moderate_high_breakout_frame(), source="kite")
+
+    with patch(
+        "stock_platform.analytics.scanner.strategy_scanner.load_universe",
+        return_value=["HIGHBRK.NS"],
+    ):
+        summary = scan_persisted_strategy_universe("nifty_50", engine=engine)
+
+    strategies = {result.strategy for result in summary.results}
+    assert "52W / 120D High Breakout" in strategies
+    assert "Breakout With Relative Volume" not in strategies

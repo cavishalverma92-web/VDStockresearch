@@ -55,6 +55,50 @@ def test_add_symbols_to_watchlist_updates_existing_row() -> None:
     assert rows[0].reason == "Second"
 
 
+def test_add_symbols_to_watchlist_saves_review_tags_and_notes() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    count = add_symbols_to_watchlist(
+        ["RELIANCE.NS"],
+        reason="Strategy Scanner: breakout setup.",
+        review_status="deep_dive",
+        tags="strategy-scan, clean-data",
+        notes="Verify event risk.",
+        engine=engine,
+    )
+
+    rows = fetch_watchlist_items(engine=engine)
+
+    assert count == 1
+    assert rows[0].review_status == "deep_dive"
+    assert rows[0].tags == "strategy-scan, clean-data"
+    assert rows[0].notes == "Verify event risk."
+
+
+def test_add_symbols_to_watchlist_merges_existing_review_context() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    add_symbols_to_watchlist(
+        ["RELIANCE.NS"],
+        tags="strategy-scan, clean-data",
+        notes="First note.",
+        engine=engine,
+    )
+    add_symbols_to_watchlist(
+        ["RELIANCE.NS"],
+        tags="clean-data, stock-research",
+        notes="Second note.",
+        engine=engine,
+    )
+
+    rows = fetch_watchlist_items(engine=engine)
+
+    assert rows[0].tags == "strategy-scan, clean-data, stock-research"
+    assert rows[0].notes == "First note.\nSecond note."
+
+
 def test_watchlist_to_frame_has_stable_columns() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)

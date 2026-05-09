@@ -23,6 +23,7 @@ from stock_platform.analytics.scanner.universe_scanner import (
     list_available_universes,
     load_universe,
 )
+from stock_platform.analytics.scanner.watchlist import add_symbols_to_watchlist
 from stock_platform.analytics.technicals import add_technical_indicators
 from stock_platform.data.repositories import fetch_price_daily
 from stock_platform.db import get_session
@@ -182,6 +183,19 @@ def _render_strategy_explanation(result) -> None:
             st.markdown("##### Manual checks")
             for item in _strategy_manual_checks(result):
                 st.markdown(f"- {item}")
+
+
+def _watchlist_tags_for_result(result) -> str:
+    tags = ["strategy-scan", result.setup_type, result.strategy]
+    if result.data_trust == "Good data":
+        tags.append("clean-data")
+    else:
+        tags.append("needs-review")
+    if result.provider_fallback_reason:
+        tags.append("provider-fallback")
+    if result.liquidity_status:
+        tags.append(f"liquidity-{result.liquidity_status.lower()}")
+    return ", ".join(tags)
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -450,6 +464,37 @@ else:
         c4.metric("Data trust", selected_result.data_trust)
 
         _render_strategy_explanation(selected_result)
+
+        watch_col, watch_note_col = st.columns([1, 3])
+        with watch_col:
+            if st.button("Add setup to Watchlist", type="primary", key="add_strategy_watchlist"):
+                reason = (
+                    f"Strategy Scanner: {selected_result.strategy} on "
+                    f"{selected_result.signal_date.isoformat()}. "
+                    f"{selected_result.why_this_appeared}"
+                )
+                notes = (
+                    f"Key risk: {selected_result.key_risk}\n"
+                    f"Data trust: {selected_result.data_trust}; "
+                    f"liquidity: {selected_result.liquidity_status}; "
+                    f"source: {selected_result.data_source}."
+                )
+                added = add_symbols_to_watchlist(
+                    [selected_result.symbol],
+                    source_universe=f"strategy_scan:{universe}",
+                    reason=reason,
+                    review_status="deep_dive"
+                    if selected_result.data_trust == "Good data"
+                    else "watch",
+                    tags=_watchlist_tags_for_result(selected_result),
+                    notes=notes,
+                )
+                st.success(f"Saved {added} research candidate to Watchlist.")
+        with watch_note_col:
+            st.caption(
+                "Watchlist saves the research reason and review tags only. "
+                "It does not create orders, positions, or portfolio actions."
+            )
 
         chart_controls = st.columns(4)
         show_volume = chart_controls[0].checkbox("Volume", value=True, key="strategy_chart_volume")
