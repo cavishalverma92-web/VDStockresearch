@@ -14,6 +14,60 @@ from stock_platform.ops import build_market_today_summary
 from stock_platform.ui.components.common import render_hosted_demo_empty_state, research_pick_button
 from stock_platform.ui.components.layout import render_page_shell
 
+
+def _brief_card(label: str, value: str, note: str) -> None:
+    st.markdown(
+        f"""
+        <div class="brief-card">
+          <div class="brief-label">{label}</div>
+          <div class="brief-value">{value}</div>
+          <div class="brief-note">{note}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _source_mix_note(price_coverage) -> str:
+    if not price_coverage or not price_coverage.total_rows:
+        return "Source mix pending until the first EOD refresh."
+    total = max(1, int(price_coverage.total_rows))
+    rows = sorted(price_coverage.by_source.items(), key=lambda item: item[1], reverse=True)
+    if not rows:
+        return "Source mix not labelled yet."
+    source, count = rows[0]
+    pct = (int(count) / total) * 100
+    return f"Main source: {str(source).title()} ({pct:.0f}% of saved rows)."
+
+
+def _latest_bar_label(price_coverage) -> tuple[str, str]:
+    if not price_coverage or price_coverage.newest_trade_date is None:
+        return "No saved bars", "Run an EOD refresh before using the daily brief."
+    return (
+        price_coverage.newest_trade_date.isoformat(),
+        f"{price_coverage.distinct_symbols:,} symbol(s), {price_coverage.total_rows:,} rows saved.",
+    )
+
+
+def _brief_action_notes(summary, latest_run, top_strategy_hits: pd.DataFrame) -> list[str]:
+    notes: list[str] = []
+    if latest_run is None:
+        notes.append("Run Data Health refresh first; the homepage has no completed EOD run yet.")
+    elif latest_run.failed_symbols:
+        notes.append(
+            f"Review Data Health: last refresh had {latest_run.failed_symbols} failed symbol(s)."
+        )
+    if top_strategy_hits.empty:
+        notes.append("Run Strategy Scanner after refresh to populate clean setup candidates.")
+    else:
+        notes.append("Review the top clean strategy setups before looking at lower-trust rows.")
+    if not summary.stale_symbols.empty:
+        notes.append(f"Refresh or exclude {len(summary.stale_symbols)} stale symbol(s).")
+    if not summary.upcoming_events.empty:
+        notes.append("Check event risk before relying on any fresh signal.")
+    return notes[:4]
+
+
 render_page_shell(
     "Market Today",
     "Morning snapshot: data freshness, breadth, and what changed in the saved scores.",
@@ -24,6 +78,9 @@ health = summary.health
 latest_run = health.recent_refresh_runs[0] if health.recent_refresh_runs else None
 breadth = summary.breadth
 token = summary.kite_token
+price_coverage = health.price_coverage
+latest_strategy_run = fetch_latest_strategy_scan()
+top_strategy_hits = top_clean_strategy_hits(latest_strategy_run, limit=5)
 
 # --- KPI strip (4 tiles, no scroll-wrap on a 13" screen) ----------------------
 k1, k2, k3, k4 = st.columns(4)
@@ -72,9 +129,40 @@ if (
 ):
     render_hosted_demo_empty_state(page="Market Today")
 
-price_coverage = health.price_coverage
+st.subheader("Daily Brief")
+st.caption("A compact queue for what deserves attention today. Research aid only.")
+latest_bar_value, latest_bar_note = _latest_bar_label(price_coverage)
+brief_cols = st.columns(4)
+with brief_cols[0]:
+    _brief_card("Data status", summary.provider_health.label, summary.provider_health.detail)
+with brief_cols[1]:
+    _brief_card("Latest saved bar", latest_bar_value, latest_bar_note)
+with brief_cols[2]:
+    strategy_value = "No scan" if latest_strategy_run is None else str(len(top_strategy_hits))
+    strategy_note = (
+        "Run Strategy Scanner after EOD refresh."
+        if latest_strategy_run is None
+        else f"Clean rows from scan #{latest_strategy_run.id}."
+    )
+    _brief_card("Clean setups", strategy_value, strategy_note)
+with brief_cols[3]:
+    risk_count = len(summary.stale_symbols) + len(summary.upcoming_events)
+    _brief_card(
+        "Risk queue",
+        str(risk_count),
+        f"{len(summary.stale_symbols)} stale, {len(summary.upcoming_events)} event item(s).",
+    )
+
+notes = _brief_action_notes(summary, latest_run, top_strategy_hits)
+if notes:
+    st.info("Daily focus: " + " ".join(notes))
+else:
+    st.success(
+        "Daily focus: saved data is current, clean setups are available, and no risk queue is flagged."
+    )
+
 if price_coverage and price_coverage.total_rows:
-    st.caption("Persisted market-data source mix")
+    st.caption("Persisted market-data source mix. " + _source_mix_note(price_coverage))
     source_total = max(1, int(price_coverage.total_rows))
     mix_cols = st.columns(4)
     source_rows = sorted(
@@ -135,8 +223,6 @@ st.divider()
 
 # --- Top strategy setups ------------------------------------------------------
 st.subheader("Top clean strategy setups")
-latest_strategy_run = fetch_latest_strategy_scan()
-top_strategy_hits = top_clean_strategy_hits(latest_strategy_run, limit=5)
 if latest_strategy_run is None:
     st.info("No saved strategy scan yet. Run Strategy Scanner after EOD refresh.")
 elif top_strategy_hits.empty:

@@ -70,6 +70,32 @@ def apply_theme() -> None:
         .chip-green { background: #ECFDF5; border-color: #A7F3D0; color: #065F46; }
         .chip-amber { background: #FFFBEB; border-color: #FCD34D; color: #78350F; }
         .chip-red   { background: #FEF2F2; border-color: #FECACA; color: #991B1B; }
+        .brief-card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #FFFFFF;
+            padding: 0.8rem 0.9rem;
+            min-height: 96px;
+        }
+        .brief-label {
+            color: var(--muted);
+            font-size: 0.72rem;
+            font-weight: 650;
+            text-transform: uppercase;
+            letter-spacing: 0;
+        }
+        .brief-value {
+            color: var(--ink);
+            font-size: 1.05rem;
+            font-weight: 750;
+            margin-top: 0.18rem;
+        }
+        .brief-note {
+            color: var(--muted);
+            font-size: 0.78rem;
+            margin-top: 0.25rem;
+            line-height: 1.35;
+        }
         .sidebar-footer {
             font-size: 0.72rem; color: var(--muted); line-height: 1.4;
             border-top: 1px solid var(--border); padding-top: 0.6rem; margin-top: 0.8rem;

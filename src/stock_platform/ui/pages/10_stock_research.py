@@ -149,37 +149,59 @@ if fundamentals_provider is db_provider:
     except Exception:
         cross_source_report = None
 
+fundamentals_frame_for_trust = fundamentals_provider.get_annual_fundamentals(symbol)
+trust_rows = build_data_trust_rows(
+    symbol=symbol,
+    price_frame=df,
+    price_source=ctx.price_provider_label,
+    price_warnings=ctx.report.warnings,
+    price_errors=ctx.report.errors,
+    fundamentals_frame=fundamentals_frame_for_trust,
+    fundamentals_source=fund_source,
+    fundamentals_warnings=[],
+    fundamentals_errors=[],
+    banking_frame=pd.DataFrame(),
+    banking_applicable=False,
+    banking_warnings=[],
+    banking_errors=[],
+    composite_missing=composite.missing_data,
+    composite_risks=composite.risks,
+    active_signal_count=sum(1 for signal in ctx.signals if signal.active),
+    delivery_available=score_delivery_stats is not None,
+    result_volatility_available=result_vol is not None,
+    cross_source_report=cross_source_report,
+)
+trust_level, trust_reason = data_trust_level(trust_rows)
+active = active_signal_names(ctx.signals)
+stance, detail = research_stance(composite, trust_level, active)
+pros, cons = pros_cons(composite, trust_rows, active)
+
+st.subheader("Research Snapshot")
+st.caption("A first-read summary before opening the detailed tabs. Research aid only.")
+snapshot = st.columns(5)
+snapshot[0].metric("Score", f"{composite.score:.1f}/100", composite.band)
+snapshot[1].metric("Data trust", trust_level)
+snapshot[2].metric("Active signals", len(active))
+snapshot[3].metric("Price source", ctx.price_provider_label)
+snapshot[4].metric("Fundamentals", fund_source)
+st.markdown(f"**Research stance:** {stance}")
+st.caption(detail)
+
+focus_left, focus_right = st.columns(2)
+with focus_left:
+    st.markdown("##### Main evidence")
+    for item in pros[:3]:
+        st.markdown(f"- {item}")
+with focus_right:
+    st.markdown("##### Verify before relying")
+    for item in cons[:3]:
+        st.markdown(f"- {item}")
+
 tab_overview, tab_chart, tab_fund, tab_tech, tab_flows = st.tabs(
     ["Overview", "Chart", "Fundamentals", "Technicals & signals", "Flows & events"]
 )
 
 with tab_overview:
-    trust_rows = build_data_trust_rows(
-        symbol=symbol,
-        price_frame=df,
-        price_source=ctx.price_provider_label,
-        price_warnings=ctx.report.warnings,
-        price_errors=ctx.report.errors,
-        fundamentals_frame=fundamentals_provider.get_annual_fundamentals(symbol),
-        fundamentals_source=fund_source,
-        fundamentals_warnings=[],
-        fundamentals_errors=[],
-        banking_frame=pd.DataFrame(),
-        banking_applicable=False,
-        banking_warnings=[],
-        banking_errors=[],
-        composite_missing=composite.missing_data,
-        composite_risks=composite.risks,
-        active_signal_count=sum(1 for signal in ctx.signals if signal.active),
-        delivery_available=score_delivery_stats is not None,
-        result_volatility_available=result_vol is not None,
-        cross_source_report=cross_source_report,
-    )
-    trust_level, trust_reason = data_trust_level(trust_rows)
-    active = active_signal_names(ctx.signals)
-    stance, detail = research_stance(composite, trust_level, active)
-    pros, cons = pros_cons(composite, trust_rows, active)
-
     render_verdict_card(
         stance=stance,
         detail=detail,

@@ -99,6 +99,91 @@ def _render_result_tab(frame: pd.DataFrame, columns: list[str], *, key: str) -> 
     research_pick_button(frame[columns], key=key)
 
 
+def _fmt_level(value: float | None) -> str:
+    return "N/A" if value is None or pd.isna(value) else f"INR {value:.2f}"
+
+
+def _fmt_number(value: float | None, suffix: str = "") -> str:
+    return "N/A" if value is None or pd.isna(value) else f"{value:.2f}{suffix}"
+
+
+def _strategy_confirmations(result) -> list[str]:
+    confirmations = [
+        f"Data source is labelled as {result.data_source or 'unknown'}.",
+        f"Data trust is {result.data_trust}.",
+        f"Liquidity status is {result.liquidity_status}.",
+    ]
+    if result.trend_status:
+        confirmations.append(f"Trend filter: {result.trend_status}.")
+    if result.rsi is not None:
+        confirmations.append(f"RSI is {_fmt_number(result.rsi)}.")
+    if result.relative_volume is not None:
+        confirmations.append(f"Relative volume is {_fmt_number(result.relative_volume, 'x')}.")
+    if result.risk_reward is not None:
+        confirmations.append(f"Planned risk/reward is {_fmt_number(result.risk_reward)}.")
+    return confirmations[:6]
+
+
+def _strategy_invalidations(result) -> list[str]:
+    invalidations = []
+    if result.stop_loss is not None:
+        invalidations.append(
+            f"Setup weakens below the mapped stop area near {_fmt_level(result.stop_loss)}."
+        )
+    if result.breakout_level is not None:
+        invalidations.append(
+            f"Failed acceptance above breakout level {_fmt_level(result.breakout_level)} needs review."
+        )
+    if result.entry_zone_low is not None and result.entry_zone_high is not None:
+        invalidations.append(
+            "If price runs far beyond the entry zone before review, risk/reward may no longer be acceptable."
+        )
+    if result.data_trust != "Good data":
+        invalidations.append(
+            "Data trust is not clean; verify source freshness before using this signal."
+        )
+    if result.provider_fallback_reason:
+        invalidations.append("Provider fallback was used; compare the latest candle with Kite/NSE.")
+    return invalidations[:5] or [
+        "No rule-level invalidation is mapped yet; verify chart structure manually."
+    ]
+
+
+def _strategy_manual_checks(result) -> list[str]:
+    checks = [
+        "Check upcoming results, news, and corporate actions before relying on the setup.",
+        "Compare the stock with its sector and the broader Nifty trend.",
+        "Avoid treating one indicator as a complete decision.",
+    ]
+    if result.atr_pct is not None and result.atr_pct >= 8:
+        checks.insert(
+            0,
+            f"ATR is high at {_fmt_number(result.atr_pct, '%')}; size and gap risk need extra review.",
+        )
+    if result.key_risk:
+        checks.insert(0, result.key_risk)
+    return checks[:5]
+
+
+def _render_strategy_explanation(result) -> None:
+    with st.expander("Strategy explanation panel", expanded=True):
+        st.caption("This explains why the row appeared in the scanner. It is not a buy/sell call.")
+        st.markdown(f"**Why this appeared:** {result.why_this_appeared}")
+        confirm_col, invalidate_col, check_col = st.columns(3)
+        with confirm_col:
+            st.markdown("##### Confirms")
+            for item in _strategy_confirmations(result):
+                st.markdown(f"- {item}")
+        with invalidate_col:
+            st.markdown("##### Invalidates")
+            for item in _strategy_invalidations(result):
+                st.markdown(f"- {item}")
+        with check_col:
+            st.markdown("##### Manual checks")
+            for item in _strategy_manual_checks(result):
+                st.markdown(f"- {item}")
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def _load_strategy_chart_data(symbol: str) -> tuple[pd.DataFrame, pd.DataFrame, str, str]:
     with get_session() as session:
@@ -364,9 +449,7 @@ else:
         c3.metric("Signal date", selected_result.signal_date.isoformat())
         c4.metric("Data trust", selected_result.data_trust)
 
-        st.caption(selected_result.why_this_appeared)
-        if selected_result.key_risk:
-            st.warning(selected_result.key_risk)
+        _render_strategy_explanation(selected_result)
 
         chart_controls = st.columns(4)
         show_volume = chart_controls[0].checkbox("Volume", value=True, key="strategy_chart_volume")

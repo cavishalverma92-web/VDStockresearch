@@ -638,3 +638,4 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
   - Added per-symbol provider fallback audit to EOD refresh outcomes and Data Health refresh output, so Kite-to-yfinance fallback warnings are visible immediately after a refresh.
   - Improved Strategy Scanner review workflow with Clean setups, Needs review, Do not trust, and All rows tabs plus Kite/fallback/freshness source summary cards.
   - Hardened Top Opportunities universe selection so hosted Render uses loadable bundled universes by default and shows CSV-backed missing universes in an expander.
+  - Upgraded Market Today with a compact Daily Brief, added a Strategy Scanner explanation panel for selected setups, and polished the Stock Research first-read snapshot before the detail tabs.

@@ -307,8 +307,8 @@ def render_hosted_demo_empty_state(*, page: str, show_data_health_link: bool = T
     )
     st.caption(
         "For a quick demo, open Data Health, run a small dry run first, then run a 5-symbol "
-        "EOD refresh with yfinance. Keep Kite disabled on the public deployment. Research aid "
-        "only, not investment advice."
+        "EOD refresh. Keep trading and portfolio access disabled on the public deployment. "
+        "Research aid only, not investment advice."
     )
     if show_data_health_link:
         st.page_link(
