@@ -36,6 +36,18 @@ from stock_platform.ui.components.layout import render_page_shell
 from stock_platform.ui.components.price_chart import build_price_chart
 
 
+def _batch_defaults(universe_name: str, total: int, fallback: int) -> int:
+    if universe_name == "all_nse_listed" or total > 500:
+        return min(100, max(1, total))
+    return min(fallback, max(1, total))
+
+
+def _batch_range(symbols: list[str], start_at: int, batch_size: int) -> tuple[list[str], int, int]:
+    start_idx = max(0, int(start_at) - 1)
+    end_idx = min(len(symbols), start_idx + int(batch_size))
+    return symbols[start_idx:end_idx], start_idx + 1, end_idx
+
+
 def _result_key(symbol: object, strategy: object, signal_date: object) -> str:
     parsed_date = pd.to_datetime(signal_date, errors="coerce")
     date_label = str(signal_date) if pd.isna(parsed_date) else parsed_date.date().isoformat()
@@ -236,12 +248,13 @@ except (FileNotFoundError, KeyError) as exc:
     universe_error = str(exc)
 
 with top[1]:
-    max_symbols = st.number_input(
-        "Max symbols",
+    large_universe = universe == "all_nse_listed" or len(symbols) > 500
+    batch_size = st.number_input(
+        "Batch size",
         min_value=1,
         max_value=max(1, len(symbols)),
-        value=min(50, max(1, len(symbols))),
-        step=5,
+        value=_batch_defaults(universe, len(symbols), 50),
+        step=25 if large_universe else 5,
         disabled=not symbols,
     )
 with top[2]:
@@ -253,21 +266,46 @@ if universe_error:
     st.warning(universe_error)
     st.stop()
 
-st.caption(f"{universe_label(universe)} contains {len(symbols):,} symbol(s).")
+batch_start = 1
+if large_universe:
+    start_col, hint_col = st.columns([1, 3])
+    with start_col:
+        batch_start = st.number_input(
+            "Start at symbol #",
+            min_value=1,
+            max_value=max(1, len(symbols)),
+            value=1,
+            step=int(batch_size),
+            disabled=not symbols,
+            key="strategy_scanner_batch_start",
+        )
+    with hint_col:
+        st.warning(
+            "Large universe mode scans saved EOD data in batches. Refresh the same batch in "
+            "Data Health first, then scan here."
+        )
 
-run_scan = st.button("Scan saved EOD data", type="primary", disabled=not symbols)
+scan_symbols, batch_from, batch_to = _batch_range(symbols, int(batch_start), int(batch_size))
+st.caption(
+    f"{universe_label(universe)} contains {len(symbols):,} symbol(s). "
+    f"Current batch: {batch_from:,}-{batch_to:,} ({len(scan_symbols):,} symbol(s))."
+)
+
+run_scan = st.button("Scan saved EOD data", type="primary", disabled=not scan_symbols)
 if run_scan:
     with st.spinner("Scanning saved OHLCV strategy setups..."):
         summary = scan_persisted_strategy_universe(
-            universe,
-            max_symbols=int(max_symbols),
+            scan_symbols,
         )
     run_id = save_strategy_scan(
         universe_name=universe,
         summary=summary,
         min_confidence_filter=float(min_confidence),
         min_rr_filter=float(min_rr),
-        note=f"UI strategy scan capped at {int(max_symbols)} symbol(s).",
+        note=(
+            f"UI strategy batch scan for {universe}: rows {batch_from}-{batch_to}; "
+            f"{len(scan_symbols)} symbol(s)."
+        ),
     )
     st.success(
         f"Saved strategy scan #{run_id}: {len(summary.results)} setup(s), "

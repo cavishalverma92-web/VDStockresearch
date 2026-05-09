@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from stock_platform.analytics.scanner import list_available_universes
+from stock_platform.analytics.scanner import list_available_universes, load_universe
 from stock_platform.jobs.refresh_eod_candles import RefreshSummary, refresh_eod_candles
 from stock_platform.ops import build_data_health_report
 from stock_platform.ui.components.common import is_hosted_demo_mode, render_hosted_demo_empty_state
@@ -15,6 +15,19 @@ render_page_shell(
     "Data Health",
     "Freshness, coverage, provider status, and refresh-run audit trail.",
 )
+
+
+def _batch_defaults(universe_name: str, total: int, fallback: int) -> int:
+    if universe_name == "all_nse_listed" or total > 500:
+        return min(100, max(1, total))
+    return min(fallback, max(1, total))
+
+
+def _batch_range(symbols: list[str], start_at: int, batch_size: int) -> tuple[list[str], int, int]:
+    start_idx = max(0, int(start_at) - 1)
+    end_idx = min(len(symbols), start_idx + int(batch_size))
+    return symbols[start_idx:end_idx], start_idx + 1, end_idx
+
 
 report = build_data_health_report()
 latest_run = report.recent_refresh_runs[0] if report.recent_refresh_runs else None
@@ -113,19 +126,35 @@ else:
         left, middle, right = st.columns(3)
         with left:
             refresh_universe = st.selectbox("Universe", universes, index=0)
+            try:
+                refresh_symbols = load_universe(refresh_universe)
+                refresh_universe_error = None
+            except (FileNotFoundError, KeyError) as exc:
+                refresh_symbols = []
+                refresh_universe_error = str(exc)
+            large_universe = refresh_universe == "all_nse_listed" or len(refresh_symbols) > 500
             dry_run = st.checkbox(
                 "Dry run only",
                 value=True,
                 help="Fetch and validate data without writing rows to the database.",
             )
         with middle:
-            max_symbols = st.number_input(
-                "Max symbols",
+            batch_size = st.number_input(
+                "Batch size",
                 min_value=1,
-                max_value=500,
-                value=5,
-                step=1,
-                help="Use a small number first. Increase after a successful test run.",
+                max_value=max(1, len(refresh_symbols)),
+                value=_batch_defaults(refresh_universe, len(refresh_symbols), 5),
+                step=25 if large_universe else 1,
+                disabled=not refresh_symbols,
+                help="Use small batches first. Increase after a successful dry run.",
+            )
+            batch_start = st.number_input(
+                "Start at symbol #",
+                min_value=1,
+                max_value=max(1, len(refresh_symbols)),
+                value=1,
+                step=int(batch_size),
+                disabled=not refresh_symbols,
             )
             initial_history_days = st.number_input(
                 "Initial backfill days",
@@ -152,16 +181,28 @@ else:
         )
 
     if run_refresh:
-        with st.spinner("Refreshing saved market data. This can take a few minutes..."):
-            summary = refresh_eod_candles(
-                universe=refresh_universe,
-                max_symbols=int(max_symbols),
-                initial_history_days=int(initial_history_days),
-                incremental_overlap_days=int(overlap_days),
-                dry_run=bool(dry_run),
-                note=note,
+        if refresh_universe_error:
+            st.warning(refresh_universe_error)
+        else:
+            batch_symbols, batch_from, batch_to = _batch_range(
+                refresh_symbols,
+                int(batch_start),
+                int(batch_size),
             )
-        _render_refresh_summary(summary)
+            if large_universe:
+                st.warning(
+                    f"Running large-universe batch {batch_from:,}-{batch_to:,}. "
+                    "Keep dry run enabled until the provider/source mix looks sensible."
+                )
+            with st.spinner("Refreshing saved market data. This can take a few minutes..."):
+                summary = refresh_eod_candles(
+                    universe=batch_symbols,
+                    initial_history_days=int(initial_history_days),
+                    incremental_overlap_days=int(overlap_days),
+                    dry_run=bool(dry_run),
+                    note=(f"{note} | universe={refresh_universe} batch={batch_from}-{batch_to}"),
+                )
+            _render_refresh_summary(summary)
 
 st.divider()
 

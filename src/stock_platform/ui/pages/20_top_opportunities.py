@@ -21,6 +21,19 @@ from stock_platform.analytics.scanner import (
 from stock_platform.ui.components.common import research_pick_button, universe_label
 from stock_platform.ui.components.layout import render_page_shell
 
+
+def _batch_defaults(universe_name: str, total: int, fallback: int) -> int:
+    if universe_name == "all_nse_listed" or total > 500:
+        return min(100, max(1, total))
+    return min(fallback, max(1, total))
+
+
+def _batch_range(symbols: list[str], start_at: int, batch_size: int) -> tuple[list[str], int, int]:
+    start_idx = max(0, int(start_at) - 1)
+    end_idx = min(len(symbols), start_idx + int(batch_size))
+    return symbols[start_idx:end_idx], start_idx + 1, end_idx
+
+
 render_page_shell(
     "Top Opportunities",
     "Run the score and signal pipeline across a chosen universe. Research aid only.",
@@ -92,18 +105,42 @@ with col3:
     min_signals = st.slider("Min active signals", 0, 7, 1)
 
 tickers = loadable_universes[universe]
+large_universe = universe == "all_nse_listed" or len(tickers) > 500
 
 with col4:
-    max_symbols = st.number_input(
-        "Max symbols",
+    batch_size = st.number_input(
+        "Batch size",
         min_value=1,
         max_value=max(1, len(tickers)),
-        value=min(25, max(1, len(tickers))),
-        step=5,
+        value=_batch_defaults(universe, len(tickers), 25),
+        step=25 if large_universe else 5,
         disabled=not tickers,
     )
 
-st.caption(f"{universe_label(universe)} contains {len(tickers):,} symbol(s).")
+batch_start = 1
+if large_universe:
+    start_col, hint_col = st.columns([1, 3])
+    with start_col:
+        batch_start = st.number_input(
+            "Start at symbol #",
+            min_value=1,
+            max_value=max(1, len(tickers)),
+            value=1,
+            step=int(batch_size),
+            disabled=not tickers,
+            key="top_opportunities_batch_start",
+        )
+    with hint_col:
+        st.warning(
+            "Large universe mode is batch-safe. Start with 100 symbols, review failures, "
+            "then continue with the next start number. This avoids rate-limit and timeout noise."
+        )
+
+scan_tickers, batch_from, batch_to = _batch_range(tickers, int(batch_start), int(batch_size))
+st.caption(
+    f"{universe_label(universe)} contains {len(tickers):,} symbol(s). "
+    f"Current batch: {batch_from:,}-{batch_to:,} ({len(scan_tickers):,} symbol(s))."
+)
 lookback_days = 400
 
 last_scan = st.session_state.get("last_scan_summary")
@@ -114,8 +151,7 @@ if last_scan and last_scan.get("universe") == universe:
         f"{last_scan['matched']} matched filters"
     )
 
-if st.button("Run universe scan", type="primary", disabled=not tickers):
-    scan_tickers = tickers[: int(max_symbols)]
+if st.button("Run universe scan", type="primary", disabled=not scan_tickers):
     progress = st.progress(0.0, text=f"Scanning 0/{len(scan_tickers)} symbols...")
 
     def _on_progress(done: int, total: int, sym: str) -> None:
@@ -136,7 +172,10 @@ if st.button("Run universe scan", type="primary", disabled=not tickers):
         lookback_days=lookback_days,
         min_score_filter=float(min_score),
         min_signals_filter=int(min_signals),
-        note=f"UI scan capped at {len(scan_tickers)} symbol(s).",
+        note=(
+            f"UI batch scan for {universe}: rows {batch_from}-{batch_to}; "
+            f"{len(scan_tickers)} symbol(s)."
+        ),
     )
     frame = scan_results_to_frame(results)
     success = frame[frame["error"].isna()]
@@ -151,6 +190,7 @@ if st.button("Run universe scan", type="primary", disabled=not tickers):
         "failed": len(frame) - len(success),
         "matched": len(filtered),
         "duration_s": duration,
+        "batch": f"{batch_from}-{batch_to}",
     }
     research_pick_button(filtered, key="top_opportunities_live")
     st.download_button(

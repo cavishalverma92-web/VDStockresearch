@@ -640,3 +640,4 @@ Verify the new multi-page Streamlit navigation manually in the browser, then con
   - Hardened Top Opportunities universe selection so hosted Render uses loadable bundled universes by default and shows CSV-backed missing universes in an expander.
   - Upgraded Market Today with a compact Daily Brief, added a Strategy Scanner explanation panel for selected setups, and polished the Stock Research first-read snapshot before the detail tabs.
   - Added the first breakout strategy expansion (`52W / 120D High Breakout`) and research-only Watchlist actions from Strategy Scanner and Stock Research, including reason, tags, notes, and review status.
+  - Made all-NSE workflows batch-safe in Data Health, Top Opportunities, and Strategy Scanner with start-row and batch-size controls, warning copy for large universes, and batch metadata in saved run notes.
