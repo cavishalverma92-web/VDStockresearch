@@ -31,20 +31,67 @@ if not universes:
     st.warning("No universes configured. Add lists to config/universes.yaml.")
     st.stop()
 
+loadable_universes: dict[str, list[str]] = {}
+unavailable_universes: dict[str, str] = {}
+for candidate in universes:
+    try:
+        loaded = load_universe(candidate)
+    except (FileNotFoundError, KeyError) as exc:
+        unavailable_universes[candidate] = str(exc)
+        continue
+    if loaded:
+        loadable_universes[candidate] = loaded
+    else:
+        unavailable_universes[candidate] = "Universe has no symbols."
+
+if not loadable_universes:
+    st.warning("No loadable universes are available. Check config/universes.yaml.")
+    with st.expander("Unavailable universes"):
+        st.dataframe(
+            [
+                {"universe": universe_label(name), "reason": reason}
+                for name, reason in unavailable_universes.items()
+            ],
+            width="stretch",
+            hide_index=True,
+        )
+    st.stop()
+
+if unavailable_universes:
+    with st.expander("Unavailable universes", expanded=False):
+        st.caption(
+            "CSV-backed universes such as All NSE Listed require local files that are not "
+            "included in the hosted Render demo. Use bundled watchlists such as Nifty 50 first."
+        )
+        st.dataframe(
+            [
+                {"universe": universe_label(name), "reason": reason}
+                for name, reason in unavailable_universes.items()
+            ],
+            width="stretch",
+            hide_index=True,
+        )
+
+default_universe = (
+    "nifty_50" if "nifty_50" in loadable_universes else next(iter(loadable_universes))
+)
+loadable_names = list(loadable_universes)
+
 col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
 with col1:
-    universe = st.selectbox("Universe", universes, format_func=universe_label)
+    universe = st.selectbox(
+        "Universe",
+        loadable_names,
+        index=loadable_names.index(default_universe),
+        format_func=universe_label,
+        key="top_opportunities_universe",
+    )
 with col2:
     min_score = st.slider("Min score", 0, 100, 60, 5)
 with col3:
     min_signals = st.slider("Min active signals", 0, 7, 1)
 
-try:
-    tickers = load_universe(universe)
-    universe_error = None
-except (FileNotFoundError, KeyError) as exc:
-    tickers = []
-    universe_error = str(exc)
+tickers = loadable_universes[universe]
 
 with col4:
     max_symbols = st.number_input(
@@ -55,10 +102,6 @@ with col4:
         step=5,
         disabled=not tickers,
     )
-
-if universe_error:
-    st.warning(universe_error)
-    st.stop()
 
 st.caption(f"{universe_label(universe)} contains {len(tickers):,} symbol(s).")
 lookback_days = 400
