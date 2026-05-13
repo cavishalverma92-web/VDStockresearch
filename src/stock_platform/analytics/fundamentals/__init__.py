@@ -16,6 +16,13 @@ from stock_platform.analytics.fundamentals.extended_ratios import (
     interest_coverage,
     working_capital_trend,
 )
+from stock_platform.analytics.fundamentals.importer import (
+    ManualFundamentalsImportPreview,
+    ManualFundamentalsImportResult,
+    import_manual_fundamentals,
+    normalize_manual_fundamentals_frame,
+    preview_manual_fundamentals_import,
+)
 from stock_platform.analytics.fundamentals.market_cap import (
     reconstruct_historical_market_cap,
 )
@@ -46,6 +53,8 @@ __all__ = [
     "CrossSourceReport",
     "FieldDisagreement",
     "FundamentalSnapshot",
+    "ManualFundamentalsImportPreview",
+    "ManualFundamentalsImportResult",
     "QuarterlyFundamentalSnapshot",
     "ScoreResult",
     "cagr_summary_for_metric",
@@ -61,9 +70,12 @@ __all__ = [
     "compute_multi_year_cagr",
     "fundamentals_required_columns_for",
     "fundamentals_score_inputs_for",
+    "import_manual_fundamentals",
     "interest_coverage",
     "is_financial_sector",
     "is_industrial_metric_applicable",
+    "normalize_manual_fundamentals_frame",
+    "preview_manual_fundamentals_import",
     "reconstruct_historical_market_cap",
     "working_capital_trend",
 ]

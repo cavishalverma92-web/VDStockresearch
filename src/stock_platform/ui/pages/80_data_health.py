@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
+from sqlalchemy import func, select
 
+from stock_platform.analytics.fundamentals import import_manual_fundamentals
 from stock_platform.analytics.scanner import list_available_universes, load_universe
+from stock_platform.db import get_session
+from stock_platform.db.models import FundamentalsAnnual, FundamentalsQuarterly
 from stock_platform.jobs.refresh_eod_candles import RefreshSummary, refresh_eod_candles
 from stock_platform.ops import build_data_health_report
 from stock_platform.ui.components.common import is_hosted_demo_mode, render_hosted_demo_empty_state
@@ -91,6 +95,55 @@ def _render_refresh_summary(summary: RefreshSummary) -> None:
     st.dataframe(_summary_frame(summary), width="stretch", hide_index=True)
 
 
+def _read_uploaded_fundamentals(uploaded_file) -> pd.DataFrame:
+    name = str(uploaded_file.name).lower()
+    if name.endswith((".xlsx", ".xls")):
+        return pd.read_excel(uploaded_file)
+    return pd.read_csv(uploaded_file)
+
+
+def _fundamentals_source_mix() -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    with get_session() as session:
+        annual_rows = session.execute(
+            select(
+                FundamentalsAnnual.source,
+                func.count(FundamentalsAnnual.id),
+                func.count(func.distinct(FundamentalsAnnual.symbol)),
+                func.max(FundamentalsAnnual.fiscal_year),
+            ).group_by(FundamentalsAnnual.source)
+        ).all()
+        quarterly_rows = session.execute(
+            select(
+                FundamentalsQuarterly.source,
+                func.count(FundamentalsQuarterly.id),
+                func.count(func.distinct(FundamentalsQuarterly.symbol)),
+                func.max(FundamentalsQuarterly.fiscal_year),
+            ).group_by(FundamentalsQuarterly.source)
+        ).all()
+    for source, count, symbols, latest_year in annual_rows:
+        rows.append(
+            {
+                "statement": "annual",
+                "source": source,
+                "rows": count,
+                "symbols": symbols,
+                "latest_fiscal_year": latest_year,
+            }
+        )
+    for source, count, symbols, latest_year in quarterly_rows:
+        rows.append(
+            {
+                "statement": "quarterly",
+                "source": source,
+                "rows": count,
+                "symbols": symbols,
+                "latest_fiscal_year": latest_year,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 if is_hosted_demo_mode():
     st.subheader("Hosted Demo Quick Start")
     st.caption(
@@ -110,6 +163,125 @@ if is_hosted_demo_mode():
             )
         _render_refresh_summary(demo_summary)
     st.divider()
+
+
+st.subheader("Manual Fundamentals Import")
+st.caption(
+    "Upload your own CSV/Excel export, preview validation warnings, then import source-labelled "
+    "annual or quarterly fundamentals. This does not scrape Screener or call trading APIs."
+)
+with st.expander("Import CSV or Excel fundamentals", expanded=False):
+    uploaded_fundamentals = st.file_uploader(
+        "Fundamentals file",
+        type=["csv", "xlsx", "xls"],
+        help=(
+            "Expected columns include symbol, fiscal_year, and financial fields such as "
+            "revenue/sales, net_income/net_profit/PAT, total_assets, total_liabilities, "
+            "shares_outstanding, and market_cap. Quarterly imports also need fiscal_quarter."
+        ),
+    )
+    import_cols = st.columns(4)
+    with import_cols[0]:
+        statement_type = st.selectbox("Statement type", ["annual", "quarterly"])
+    with import_cols[1]:
+        source_label = st.text_input("Source label", value="manual_screener_export")
+    with import_cols[2]:
+        values_in_crores = st.checkbox(
+            "Rupee values are in crore",
+            value=True,
+            help="Screener-style exports usually show rupee amounts in crore. EPS is not scaled.",
+        )
+    with import_cols[3]:
+        allow_partial = st.checkbox(
+            "Allow partial import",
+            value=False,
+            help="Off by default. When off, rows with validation errors block the import.",
+        )
+
+    if uploaded_fundamentals is not None:
+        try:
+            uploaded_frame = _read_uploaded_fundamentals(uploaded_fundamentals)
+        except Exception as exc:  # noqa: BLE001
+            uploaded_frame = pd.DataFrame()
+            st.error(f"Could not read fundamentals file: {type(exc).__name__}: {exc}")
+
+        if not uploaded_frame.empty:
+            preview = import_manual_fundamentals(
+                uploaded_frame,
+                statement_type=statement_type,
+                source=source_label,
+                values_in_crores=values_in_crores,
+                allow_partial=allow_partial,
+                dry_run=True,
+            ).preview
+            metric_cols = st.columns(4)
+            metric_cols[0].metric("Rows", preview.rows)
+            metric_cols[1].metric("Symbols", preview.symbols)
+            metric_cols[2].metric("Symbols with errors", len(preview.errors))
+            metric_cols[3].metric("Symbols with warnings", len(preview.warnings))
+
+            if preview.errors:
+                st.error(
+                    "Validation found errors. Keep partial import off unless you intentionally "
+                    "want to save incomplete research data with visible source labels."
+                )
+                st.dataframe(
+                    pd.DataFrame(
+                        [
+                            {"symbol": symbol, "errors": "; ".join(errors)}
+                            for symbol, errors in preview.errors.items()
+                        ]
+                    ),
+                    width="stretch",
+                    hide_index=True,
+                )
+            if preview.warnings:
+                with st.expander("Validation warnings", expanded=False):
+                    st.dataframe(
+                        pd.DataFrame(
+                            [
+                                {"symbol": symbol, "warnings": "; ".join(warnings)}
+                                for symbol, warnings in preview.warnings.items()
+                            ]
+                        ),
+                        width="stretch",
+                        hide_index=True,
+                    )
+
+            st.caption("Normalized preview, first 25 rows")
+            st.dataframe(preview.normalized_frame.head(25), width="stretch", hide_index=True)
+
+            import_disabled = bool(preview.errors) and not allow_partial
+            if st.button(
+                "Import fundamentals to database",
+                type="primary",
+                disabled=import_disabled,
+            ):
+                result = import_manual_fundamentals(
+                    uploaded_frame,
+                    statement_type=statement_type,
+                    source=source_label,
+                    values_in_crores=values_in_crores,
+                    allow_partial=allow_partial,
+                    dry_run=False,
+                )
+                st.success(
+                    f"Import complete: {result.inserted} inserted, "
+                    f"{result.updated} updated, {result.skipped} skipped."
+                )
+                st.info(
+                    "Open Stock Research > Fundamentals to inspect imported rows. "
+                    "Treat imported fundamentals as research data, not investment advice."
+                )
+
+    mix = _fundamentals_source_mix()
+    if mix.empty:
+        st.info("No persisted fundamentals rows yet.")
+    else:
+        st.caption("Persisted fundamentals source mix")
+        st.dataframe(mix, width="stretch", hide_index=True)
+
+st.divider()
 
 
 st.subheader("Run Daily EOD Refresh")
